@@ -1,15 +1,22 @@
 # Deployment
 
-omp-deck ships **without an authentication layer**. It is designed to be
-loopback-only with network access gated by something else — Tailscale, an SSH
-tunnel, or a reverse proxy with its own auth. Do not bind it to a public
-interface without one of these.
+By default omp-deck is loopback-only with network access gated by something
+else — Tailscale, an SSH tunnel, or a reverse proxy with its own auth. Since
+0.7.0 it also ships an optional **access-token layer**
+(`OMP_DECK_ACCESS_TOKEN`) that protects every `/api`, `/ws` and `/uploads`
+request with a bearer token — use it for any public-ish binding, and
+combine it with the network-level gates below for defense in depth.
+
+Multi-machine deployments (a center deck on a VPS + omp agent hosts on your
+other machines) are covered in [multi-machine.md](multi-machine.md).
 
 ## Patterns
 
 - [Tailscale-gated (recommended)](#tailscale-gated-recommended)
 - [SSH tunnel](#ssh-tunnel)
+- [Access token](#access-token)
 - [Docker](#docker)
+- [Multi-machine](#multi-machine)
 - [Hardening checklist](#hardening-checklist)
 
 ## Tailscale-gated (recommended)
@@ -38,8 +45,9 @@ tailscale funnel --bg --https=443 http://127.0.0.1:8787
 ```
 
 Funnel exposes the URL to the public internet. Anyone with the link can
-reach the deck. Combine with bearer-token auth at the reverse proxy layer if
-you want this to be safe to share.
+reach the deck. Set `OMP_DECK_ACCESS_TOKEN` (see
+[Access token](#access-token)) before sharing a Funnel URL — without it the
+deck is fully open to whoever has the link.
 
 ## SSH tunnel
 
@@ -62,6 +70,37 @@ Host deck-host
   User <user>
   LocalForward 8787 127.0.0.1:8787
 ```
+
+## Access token
+
+Since 0.7.0, setting `OMP_DECK_ACCESS_TOKEN` turns on bearer-token
+authentication for every `/api`, `/ws` and `/uploads` request
+(`/api/health` + `/api/version` stay open for liveness probes):
+
+```sh
+OMP_DECK_ACCESS_TOKEN="$(openssl rand -hex 32)" bun run start
+```
+
+The web client sends the token automatically once it is stored in
+localStorage under `omp-deck:access-token` — set it from the browser console
+(`localStorage.setItem('omp-deck:access-token', '<token>')`) or a tiny
+bookmarklet. Until the token matches, the header indicator shows
+"unauthorized" and API calls return `401 {"error":"unauthorized"}`. The
+token is read on every request and every WebSocket connect, so a reload is
+not required after setting it.
+
+This layer is **not** a substitute for the network gates: it protects the
+deck's own surface but adds no identity story (no login, no per-user
+accounts). Put Tailscale/SSH in front for identity; use the token when the
+deck must be reachable from more than one machine.
+
+## Multi-machine
+
+One center deck on a VPS + `omp-agent-host` extensions on each of your other
+machines: session aggregation with machine labels, per-machine session
+create/switch, remote env editing, and kanban task assignment to machines.
+Full walkthrough (center systemd/Docker, host extension install, systemd
+unit, security notes): **[multi-machine.md](multi-machine.md)**.
 
 ## Docker
 
@@ -102,6 +141,8 @@ OMP_DECK_DB_PATH=/var/lib/omp-deck/deck.db    # outside the container fs
 OMP_DECK_DATA_DIR=/var/lib/omp-deck           # managed .env + audit + bridge db
 OMP_AGENT_DIR=/var/lib/omp/agent              # SDK session + auth
 OMP_DECK_DEFAULT_CWD=/workspace               # mount your code here
+OMP_DECK_ACCESS_TOKEN=<openssl rand -hex 32>  # bearer gate for /api + /ws
+OMP_DECK_MACHINES_FILE=/var/lib/omp-deck/machines.json  # remote hosts (default)
 LOG_LEVEL=warn                                # quieter in steady state
 ```
 
@@ -112,6 +153,9 @@ Before exposing the deck on a network anyone else can reach:
 - [ ] `OMP_DECK_HOST=127.0.0.1` (default). Confirm with `ss -tlnp` or `netstat`.
 - [ ] Front it with Tailscale Serve, an SSH tunnel, or a reverse proxy that
       enforces auth. Never bind `0.0.0.0` without one.
+- [ ] If the deck is reachable from more than one machine, set
+      `OMP_DECK_ACCESS_TOKEN` (and set it in the browser's localStorage —
+      the indicator shows "unauthorized" until it matches).
 - [ ] Provider API keys live in env vars (via shell profile or the deck's
       managed `.env`) — never committed in the repo or shipped in an image.
 - [ ] The data dir (`OMP_DECK_DATA_DIR`) is user-only readable. `chmod 700` on

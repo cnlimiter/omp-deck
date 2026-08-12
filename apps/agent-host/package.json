@@ -1,6 +1,6 @@
 {
 	"name": "@omp-deck/agent-host",
-	"version": "0.6.1",
+	"version": "0.7.0",
 	"private": true,
 	"type": "module",
 	"description": "omp extension that turns a machine into a remote agent host for omp-deck. Runs inside `omp --mode rpc`; no binary build, no runtime dependencies beyond the omp SDK.",

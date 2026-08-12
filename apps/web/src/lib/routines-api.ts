@@ -6,13 +6,14 @@ import type {
 	Routine,
 	UpdateRoutineRequest,
 } from "@omp-deck/protocol";
+import { authHeaders } from "./api";
 
 const BASE = "/api";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
-		headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+		headers: { "content-type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
 	});
 	if (!res.ok) {
 		const body = await res.text().catch(() => "");

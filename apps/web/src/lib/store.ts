@@ -35,7 +35,7 @@ export interface NotificationItem {
 /** Max notifications retained in the in-app queue. Older items fall off. */
 const MAX_NOTIFICATIONS = 50;
 
-import { api } from "./api";
+import { api, onUnauthorized } from "./api";
 import { applyEvent, initSession } from "./reducer";
 import type { SessionUi } from "./types";
 import { WsClient, type WsStatus } from "./ws";
@@ -66,6 +66,8 @@ function readChromeOpen(key: string, desktopFallback: boolean): boolean {
 interface StoreState {
 	ws: WsClient | null;
 	wsStatus: WsStatus;
+	/** True after any API 401 — the deck requires OMP_DECK_ACCESS_TOKEN. */
+	unauthorized: boolean;
 	connectionId?: string;
 
 	workspaces: WorkspaceEntry[];
@@ -159,7 +161,7 @@ interface StoreState {
 	disconnect(): void;
 	refreshWorkspaces(): Promise<void>;
 	refreshSessions(cwd?: string): Promise<void>;
-	createSession(opts: { cwd: string; resumeFromPath?: string }): Promise<string>;
+	createSession(opts: { cwd: string; resumeFromPath?: string; agentId?: string }): Promise<string>;
 	selectSession(id: string): void;
 	sendPrompt(text: string, images?: import("@omp-deck/protocol").ImageAttachment[]): void;
 	abort(): void;
@@ -209,6 +211,7 @@ export const useStore = create<StoreState>()(
 	subscribeWithSelector((set, get) => ({
 		ws: null,
 		wsStatus: "closed",
+		unauthorized: false,
 		workspaces: [],
 		defaultCwd: "",
 		sessions: [],
@@ -229,6 +232,9 @@ export const useStore = create<StoreState>()(
 
 		async bootstrap() {
 			get().connect();
+			// Surface 401s (OMP_DECK_ACCESS_TOKEN mismatch) as a connection
+			// state so the header indicator can guide the user to Settings.
+			onUnauthorized(() => set({ unauthorized: true }));
 			await Promise.all([get().refreshWorkspaces(), get().refreshSessions()]);
 		},
 
@@ -268,6 +274,7 @@ export const useStore = create<StoreState>()(
 			const created = await api.createSession({
 				cwd: opts.cwd,
 				...(opts.resumeFromPath ? { resumeFromPath: opts.resumeFromPath } : {}),
+				...(opts.agentId && opts.agentId !== "local" ? { agentId: opts.agentId } : {}),
 			});
 			// Subscribe immediately; reducer will hydrate from the `subscribed` snapshot.
 			get().ws?.send({ type: "subscribe", sessionId: created.sessionId });
@@ -611,7 +618,18 @@ function handleFrame(
 				const id = frame.sessionId;
 				if (!id) return {};
 				const prev = s.sessionsById[id];
-				if (!prev) return {};
+				if (!prev) {
+					// Error for a session the store never hydrated (dead remote
+					// session, host reaped it, deck restarted): bail out of the
+					// dead active session instead of silently dropping the frame
+					// and leaving prompts no-op'ing against a ghost.
+					if (s.activeId === id) {
+						const subscribed = new Set(s.subscribed);
+						subscribed.delete(id);
+						return { activeId: undefined, subscribed };
+					}
+					return {};
+				}
 				return {
 					sessionsById: {
 						...s.sessionsById,
@@ -622,6 +640,9 @@ function handleFrame(
 			return;
 
 		case "heartbeat":
+			// A live heartbeat means the access token (if any) is accepted —
+			// clear the unauthorized flag so the indicator recovers without a
+			// reload after the user sets the token.
 			set(() => ({
 				heartbeat: {
 					lastReceivedAtMs: Date.now(),
@@ -631,6 +652,7 @@ function handleFrame(
 					buildSha: frame.buildSha,
 					version: frame.version,
 				},
+				unauthorized: false,
 			}));
 			return;
 

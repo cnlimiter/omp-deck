@@ -23,6 +23,7 @@ interface TaskRow {
 	updated_at: string;
 	state_entered_at: string;
 	archived_at: string | null;
+	assigned_agent: string | null;
 }
 
 interface StateRow {
@@ -44,6 +45,7 @@ function rowToTask(r: TaskRow): Task {
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
 		stateEnteredAt: r.state_entered_at,
+		assignedAgent: r.assigned_agent,
 	};
 	if (r.cwd !== null) t.cwd = r.cwd;
 	if (r.archived_at !== null) t.archivedAt = r.archived_at;
@@ -206,7 +208,7 @@ export function listTasks(opts: { includeArchived?: boolean } = {}): Task[] {
 	const where = opts.includeArchived ? "" : "WHERE archived_at IS NULL";
 	const rows = getDb()
 		.query<TaskRow, []>(
-			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at
+			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at, assigned_agent
 			 FROM tasks
 			 ${where}
 			 ORDER BY state_id, state_entered_at DESC, order_in_state ASC`,
@@ -218,7 +220,7 @@ export function listTasks(opts: { includeArchived?: boolean } = {}): Task[] {
 export function getTask(taskId: string): Task | undefined {
 	const row = getDb()
 		.query<TaskRow, [string]>(
-			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at
+			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at, assigned_agent
 			 FROM tasks WHERE id = ?`,
 		)
 		.get(taskId) as TaskRow | null;
@@ -230,6 +232,7 @@ export function createTask(input: {
 	body?: string;
 	stateId?: string;
 	cwd?: string;
+	assignedAgent?: string | null;
 }): Task {
 	const db = getDb();
 	const state = input.stateId ? getState(input.stateId) : getDefaultState();
@@ -252,10 +255,10 @@ export function createTask(input: {
 			.get() as { value: number } | null;
 		if (!seqRow) throw new Error(i18n.t("tasks sequence missing — migration 002 not applied"));
 		displayId = seqRow.value;
-		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string]>(
-			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, input.cwd ?? null, now, now, now);
+		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string, string | null]>(
+			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, assigned_agent)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, input.cwd ?? null, now, now, now, input.assignedAgent ?? null);
 	})();
 	const out = getTask(taskId);
 	if (!out) throw new Error(i18n.t("createTask failed"));
@@ -271,6 +274,7 @@ export function updateTask(
 		orderInState?: number;
 		cwd?: string;
 		archived?: boolean;
+		assignedAgent?: string | null;
 	},
 ): Task | undefined {
 	const existing = getTask(taskId);
@@ -284,13 +288,14 @@ export function updateTask(
 	// edits must NOT reset the per-column recency sort.
 	const stateChanged = patch.stateId !== undefined && patch.stateId !== existing.stateId;
 	const stateEnteredAt = stateChanged ? nowIso() : existing.stateEnteredAt;
+	const assignedAgent = patch.assignedAgent === undefined ? existing.assignedAgent : patch.assignedAgent;
 	db.prepare<
 		unknown,
-		[string, string, string, number, string | null, string, string, string | null, string]
+		[string, string, string, number, string | null, string, string, string | null, string | null, string]
 	>(
 		`UPDATE tasks
 		   SET title = ?, body = ?, state_id = ?, order_in_state = ?, cwd = ?,
-		       updated_at = ?, state_entered_at = ?, archived_at = ?
+		       updated_at = ?, state_entered_at = ?, archived_at = ?, assigned_agent = ?
 		 WHERE id = ?`,
 	).run(
 		next.title,
@@ -301,6 +306,7 @@ export function updateTask(
 		nowIso(),
 		stateEnteredAt,
 		archivedAt,
+		assignedAgent,
 		taskId,
 	);
 	return getTask(taskId);

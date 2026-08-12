@@ -133,7 +133,11 @@ export function Sidebar() {
 						title={s.title || formatSessionId(s.id)}
 						subtitle={`${shortPath(s.cwd, 26)} · ${s.messageCount}m`}
 						meta={formatRelative(s.updatedAt || s.createdAt)}
-						onClick={() => void handleResume(s.path)}
+						onClick={() =>
+							s.agentId && s.agentId !== "local"
+								? selectSession(s.id)
+								: void handleResume(s.path)
+						}
 					/>
 				))}
 

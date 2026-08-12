@@ -46,6 +46,14 @@ export function Chat() {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<ChatHeader />
+			{session.lastError ? (
+				<div
+					role="alert"
+					className="mx-auto mt-3 w-full max-w-[760px] rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs text-danger"
+				>
+					{session.lastError}
+				</div>
+			) : null}
 			<div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
 				<div className="mx-auto flex max-w-[760px] flex-col gap-7 px-6 py-10">
 					{messages.length === 0 ? (

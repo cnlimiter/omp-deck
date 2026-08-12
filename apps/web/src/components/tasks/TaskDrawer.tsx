@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, X } from "lucide-react";
-import type { Task, TaskState } from "@omp-deck/protocol";
+import type { MachineInfo, Task, TaskState } from "@omp-deck/protocol";
 import { cn } from "@/lib/utils";
 
 interface Props {
 	task: Task;
 	states: TaskState[];
+	machines: MachineInfo[];
 	onClose: () => void;
 	onSave: (patch: { title?: string; body?: string; stateId?: string }) => void;
+	onAssign: (agentId: string | null) => void;
 	onDelete: () => void;
 	onArchive: () => void;
 	onOpenInChat: () => void;
 }
 
-export function TaskDrawer({ task, states, onClose, onSave, onDelete, onArchive, onOpenInChat }: Props) {
+export function TaskDrawer({ task, states, machines, onClose, onSave, onAssign, onDelete, onArchive, onOpenInChat }: Props) {
 	const { t } = useTranslation();
 	const [title, setTitle] = useState(task.title);
 	const [body, setBody] = useState(task.body);
@@ -105,6 +107,23 @@ export function TaskDrawer({ task, states, onClose, onSave, onDelete, onArchive,
 					<span className="ml-auto text-ink-4">
 						{t("updated {{date}}", { date: new Date(task.updatedAt).toLocaleString() })}
 					</span>
+				</div>
+				<div className="mt-1 flex items-center gap-2 font-mono text-2xs">
+					<span className="text-ink-3">{t("assigned to")}</span>
+					<select
+						value={task.assignedAgent ?? ""}
+						onChange={(e) => onAssign(e.target.value === "" ? null : e.target.value)}
+						className="field h-6 px-2 text-xs"
+						title={t("Which agent host runs this task")}
+					>
+						<option value="">{t("(unassigned)")}</option>
+						<option value="local">{t("this machine (local)")}</option>
+						{machines.map((m) => (
+							<option key={m.id} value={m.id}>
+								{m.name} ({m.id})
+							</option>
+						))}
+					</select>
 				</div>
 			</div>
 

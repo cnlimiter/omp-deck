@@ -8,6 +8,7 @@ import type {
 	EnvEntry,
 	GateKnob,
 	ListEnvSettingsResponse,
+	MachineInfo,
 	MaintenanceGateState,
 	NotificationLevel,
 	PreludeResponse,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { OAuthFlowModal } from "@/components/settings/OAuthFlowModal";
 import { bridgesApi } from "@/lib/bridges-api";
+import { machinesApi } from "@/lib/machines-api";
 import { settingsApi } from "@/lib/settings-api";
 import { orientationApi } from "@/lib/orientation-api";
 import { authApi } from "@/lib/auth-api";
@@ -33,6 +35,7 @@ import i18n, { SUPPORTED_LANGS, getStoredLang, setLang } from "@/i18n";
 
 const SECTIONS = [
 	{ id: "env", label: "Env", description: "Process and deck-managed variables" },
+	{ id: "machines", label: "Machines", description: "Remote omp agent hosts" },
 	{ id: "providers", label: "Providers", description: "OAuth sign-in and API-key state" },
 	{ id: "messaging", label: "Messaging", description: "Telegram and future chat bridges" },
 	{ id: "orientation", label: "Orientation", description: "Prelude, /start, maintenance gate" },
@@ -87,6 +90,8 @@ export function SettingsView() {
 						<section className="min-h-0 overflow-auto p-4">
 							{selected === "env" ? (
 								<EnvSection />
+							) : selected === "machines" ? (
+								<MachinesSection />
 							) : selected === "providers" ? (
 								<ProvidersSection />
 							) : selected === "messaging" ? (
@@ -108,7 +113,29 @@ export function SettingsView() {
 	);
 }
 
-function EnvSection() {
+/** Env-fetching client — local settingsApi or a remote machine proxy. */
+interface EnvClient {
+	listEnv(): Promise<ListEnvSettingsResponse>;
+	patchEnv(updates: Record<string, string | null>): Promise<ListEnvSettingsResponse>;
+	restart?(): Promise<{ ok: boolean; message?: string }>;
+}
+
+/**
+ * Generic env browser over an {@link EnvClient}. The local Env section and
+ * the Machines section's per-machine env views share this; the only
+ * difference is which client backs it.
+ */
+function EnvBrowser({
+	heading,
+	client,
+	fileInfo,
+	group,
+}: {
+	heading: string;
+	client: EnvClient;
+	fileInfo?: boolean;
+	group?: boolean;
+}) {
 	const { t } = useTranslation();
 	const [data, setData] = useState<ListEnvSettingsResponse | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -118,7 +145,7 @@ function EnvSection() {
 
 	async function refresh(): Promise<void> {
 		try {
-			const next = await settingsApi.listEnv();
+			const next = await client.listEnv();
 			setData(next);
 			setError(undefined);
 		} catch (e) {
@@ -149,8 +176,9 @@ function EnvSection() {
 	}, [data]);
 
 	async function restart(): Promise<void> {
+		if (!client.restart) return;
 		try {
-			const resp = await settingsApi.restartServer();
+			const resp = await client.restart();
 			setRestartMessage(resp.message || t("Restart scheduled"));
 		} catch (e) {
 			setError(String(e));
@@ -158,17 +186,19 @@ function EnvSection() {
 	}
 
 	return (
-		<div className="mx-auto max-w-6xl space-y-4">
+		<div className="space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">{t("Environment variables")}</h1>
-				<p className="mt-1 max-w-3xl text-sm text-ink-3">
-					{t(
-						"Edits write to the deck-managed env file only. Variables from the launching process stay higher priority until you remove them from that shell/profile.",
-					)}
-				</p>
+				<h1 className="text-xl font-semibold tracking-tight">{heading}</h1>
+				{group ? (
+					<p className="mt-1 max-w-3xl text-sm text-ink-3">
+						{t(
+							"Edits write to the deck-managed env file only. Variables from the launching process stay higher priority until you remove them from that shell/profile.",
+						)}
+					</p>
+				) : null}
 			</div>
 
-			{data?.restartRequired ? (
+			{data?.restartRequired && client.restart ? (
 				<div className="flex items-center gap-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
 					<div className="min-w-0 flex-1">
 						{t("Restart server to apply one or more restart-required values from the managed .env.")}
@@ -190,28 +220,457 @@ function EnvSection() {
 				</div>
 			) : null}
 
-			<div className="rounded-md border border-line bg-paper-2 px-3 py-2 font-mono text-2xs text-ink-3">
-				<div>dataDir: {data?.dataDir ?? "..."}</div>
-				<div>envFile: {data?.envFilePath ?? "..."}</div>
-			</div>
+			{fileInfo ? (
+				<div className="rounded-md border border-line bg-paper-2 px-3 py-2 font-mono text-2xs text-ink-3">
+					<div>dataDir: {data?.dataDir ?? "..."}</div>
+					<div>envFile: {data?.envFilePath ?? "..."}</div>
+				</div>
+			) : null}
 
 			{loading ? <div className="text-sm text-ink-3">{t("Loading...")}</div> : null}
 			{data ? (
 				<>
-					<EnvTable title={t("omp-deck")} entries={grouped.deck} onEdit={setEditing} />
-					<EnvTable title={t("messaging bridges")} entries={grouped.messaging} onEdit={setEditing} />
-					<EnvTable title={t("omp SDK / providers")} entries={grouped.sdk} onEdit={setEditing} />
+					{group ? (
+						<>
+							<EnvTable title={t("omp-deck")} entries={grouped.deck} onEdit={setEditing} />
+							<EnvTable title={t("messaging bridges")} entries={grouped.messaging} onEdit={setEditing} />
+							<EnvTable title={t("omp SDK / providers")} entries={grouped.sdk} onEdit={setEditing} />
+						</>
+					) : (
+						<EnvTable title={t("host env")} entries={data.entries} onEdit={setEditing} />
+					)}
 				</>
 			) : null}
 
 			<EditEnvModal
 				entry={editing}
 				onClose={() => setEditing(null)}
+				patch={client.patchEnv}
 				onSaved={(next) => {
 					setData(next);
 					setEditing(null);
 				}}
 			/>
+		</div>
+	);
+}
+
+function EnvSection() {
+	const { t } = useTranslation();
+	return (
+		<div className="mx-auto max-w-6xl space-y-4">
+			<EnvBrowser
+				heading={t("Environment variables")}
+				client={{
+					listEnv: settingsApi.listEnv,
+					patchEnv: settingsApi.patchEnv,
+					restart: async () => settingsApi.restartServer(),
+				}}
+				fileInfo
+				group
+			/>
+		</div>
+	);
+}
+
+/**
+ * Remote agent-host registry: list/add/edit/remove machines, probe live
+ * status, and open each machine's env browser (proxy of /host/env).
+ */
+function MachinesSection() {
+	const { t } = useTranslation();
+	const [machines, setMachines] = useState<MachineInfo[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | undefined>();
+	const [envMachineId, setEnvMachineId] = useState<string | null>(null);
+	const [editing, setEditing] = useState<MachineInfo | null>(null);
+	const [adding, setAdding] = useState(false);
+
+	async function refresh(): Promise<void> {
+		try {
+			const resp = await machinesApi.list();
+			setMachines(resp.machines);
+			setError(undefined);
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	useEffect(() => {
+		void refresh();
+	}, []);
+
+	async function removeMachine(id: string): Promise<void> {
+		if (!confirm(t('Remove machine "{{id}}"?', { id }))) return;
+		try {
+			await machinesApi.remove(id);
+			setMachines((prev) => prev.filter((m) => m.id !== id));
+		} catch (e) {
+			setError(String(e));
+		}
+	}
+
+	if (envMachineId) {
+		const machine = machines.find((m) => m.id === envMachineId);
+		return (
+			<div className="mx-auto max-w-6xl space-y-4">
+				<div className="flex items-center gap-2">
+					<Button variant="outline" size="sm" onClick={() => setEnvMachineId(null)}>
+						← {t("Machines")}
+					</Button>
+					<h1 className="text-lg font-semibold tracking-tight">
+						{t("Environment — {{machine}}", { machine: machine?.name ?? envMachineId })}
+					</h1>
+				</div>
+				<EnvBrowser
+					heading=""
+					client={{
+						listEnv: () => machinesApi.env(envMachineId),
+						patchEnv: (updates) => machinesApi.patchEnv(envMachineId, updates),
+					}}
+				/>
+			</div>
+		);
+	}
+
+	return (
+		<div className="mx-auto max-w-6xl space-y-4">
+			<div>
+				<h1 className="text-xl font-semibold tracking-tight">{t("Machines")}</h1>
+				<p className="mt-1 max-w-3xl text-sm text-ink-3">
+					{t(
+						"Remote omp agent hosts running the omp-agent-host extension. Sessions created on a machine run there; kanban tasks can be assigned to a machine.",
+					)}
+				</p>
+			</div>
+
+			{error ? (
+				<div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs text-danger">
+					{error}
+				</div>
+			) : null}
+
+			{loading ? <div className="text-sm text-ink-3">{t("Loading...")}</div> : null}
+
+			<div className="space-y-2">
+				{machines.map((m) => (
+					<div
+						key={m.id}
+						className="flex items-center gap-3 rounded-md border border-line bg-paper px-3 py-2.5 text-sm"
+					>
+						<span
+							className={`h-2 w-2 shrink-0 rounded-full ${m.online ? "bg-success" : "bg-danger"}`}
+							title={m.online ? t("online") : t("offline")}
+						/>
+						<div className="min-w-0 flex-1">
+							<div className="flex items-baseline gap-2">
+								<span className="truncate font-medium text-ink">{m.name}</span>
+								<span className="font-mono text-2xs text-ink-4">{m.id}</span>
+								{m.defaultCwd ? (
+									<span className="truncate font-mono text-2xs text-ink-3">{m.defaultCwd}</span>
+								) : null}
+							</div>
+							<div className="truncate font-mono text-2xs text-ink-3">
+								{m.baseUrl} · {m.online ? t("online") : t("offline")}
+								{m.modelCount !== undefined ? ` · ${m.modelCount} ${t("models")}` : ""}
+								{m.sessionCount !== undefined ? ` · ${m.sessionCount} ${t("sessions")}` : ""}
+							</div>
+						</div>
+						<div className="flex shrink-0 gap-1.5">
+							<Button variant="outline" size="sm" onClick={() => setEnvMachineId(m.id)}>
+								{t("Env")}
+							</Button>
+							<Button variant="outline" size="sm" onClick={() => setEditing(m)}>
+								{t("Edit")}
+							</Button>
+							<Button variant="danger" size="sm" onClick={() => void removeMachine(m.id)}>
+								{t("Remove")}
+							</Button>
+						</div>
+					</div>
+				))}
+				{machines.length === 0 && !loading ? (
+					<div className="rounded-md border border-dashed border-line-strong px-3 py-6 text-center font-mono text-2xs text-ink-3">
+						{t("No machines registered. Add the first one below.")}
+					</div>
+				) : null}
+			</div>
+
+			<Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+				+ {t("Add machine")}
+			</Button>
+
+			<MachineEditModal
+				machine={editing}
+				open={editing !== null}
+				onClose={() => setEditing(null)}
+				onSaved={(next) => {
+					setMachines((prev) => prev.map((m) => (m.id === next.id ? { ...m, ...next } : m)));
+					setEditing(null);
+					void refresh();
+				}}
+			/>
+			<MachineAddModal
+				open={adding}
+				onClose={() => setAdding(false)}
+				onAdded={() => {
+					setAdding(false);
+					void refresh();
+				}}
+			/>
+		</div>
+	);
+}
+
+function MachineEditModal({
+	machine,
+	open,
+	onClose,
+	onSaved,
+}: {
+	machine: MachineInfo | null;
+	open: boolean;
+	onClose: () => void;
+	onSaved: (next: { id: string; name: string; baseUrl: string; defaultCwd?: string }) => void;
+}) {
+	const { t } = useTranslation();
+	const [name, setName] = useState("");
+	const [baseUrl, setBaseUrl] = useState("");
+	const [token, setToken] = useState("");
+	const [defaultCwd, setDefaultCwd] = useState("");
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState<string | undefined>();
+
+	useEffect(() => {
+		if (!machine) return;
+		setName(machine.name);
+		setBaseUrl(machine.baseUrl);
+		setToken(""); // never prefill secrets
+		setDefaultCwd(machine.defaultCwd ?? "");
+		setError(undefined);
+	}, [machine]);
+
+	if (!open || !machine) return null;
+	const machineId = machine.id;
+
+	async function save(): Promise<void> {
+		setSaving(true);
+		try {
+			await machinesApi.update(machineId, {
+				name,
+				baseUrl,
+				...(token.trim() ? { token: token.trim() } : {}),
+				// Always send defaultCwd so clearing the field removes it.
+				defaultCwd: defaultCwd.trim(),
+			});
+			onSaved({ id: machineId, name, baseUrl, defaultCwd: defaultCwd.trim() || undefined });
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<Modal open={open} onClose={onClose} widthClass="max-w-lg">
+			<MachineForm
+				title={t("Edit machine")}
+				idReadOnly={machine.id}
+				name={name}
+				setName={setName}
+				baseUrl={baseUrl}
+				setBaseUrl={setBaseUrl}
+				token={token}
+				setToken={setToken}
+				defaultCwd={defaultCwd}
+				setDefaultCwd={setDefaultCwd}
+				error={error}
+				saving={saving}
+				onSave={() => void save()}
+				onClose={onClose}
+			/>
+		</Modal>
+	);
+}
+
+function MachineAddModal({
+	open,
+	onClose,
+	onAdded,
+}: {
+	open: boolean;
+	onClose: () => void;
+	onAdded: () => void;
+}) {
+	const { t } = useTranslation();
+	const [id, setId] = useState("");
+	const [name, setName] = useState("");
+	const [baseUrl, setBaseUrl] = useState("");
+	const [token, setToken] = useState("");
+	const [defaultCwd, setDefaultCwd] = useState("");
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState<string | undefined>();
+
+	async function save(): Promise<void> {
+		setSaving(true);
+		try {
+			await machinesApi.register({
+				id: id.trim(),
+				name: name.trim(),
+				baseUrl: baseUrl.trim(),
+				token: token.trim(),
+				...(defaultCwd.trim() ? { defaultCwd: defaultCwd.trim() } : {}),
+			});
+			setId("");
+			setName("");
+			setBaseUrl("");
+			setToken("");
+			setDefaultCwd("");
+			onAdded();
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<Modal open={open} onClose={onClose} widthClass="max-w-lg">
+			<MachineForm
+				title={t("Add machine")}
+				id={id}
+				setId={setId}
+				name={name}
+				setName={setName}
+				baseUrl={baseUrl}
+				setBaseUrl={setBaseUrl}
+				token={token}
+				setToken={setToken}
+				defaultCwd={defaultCwd}
+				setDefaultCwd={setDefaultCwd}
+				error={error}
+				saving={saving}
+				onSave={() => void save()}
+				onClose={onClose}
+			/>
+		</Modal>
+	);
+}
+
+function MachineForm({
+	title,
+	id,
+	setId,
+	idReadOnly,
+	name,
+	setName,
+	baseUrl,
+	setBaseUrl,
+	token,
+	setToken,
+	defaultCwd,
+	setDefaultCwd,
+	error,
+	saving,
+	onSave,
+	onClose,
+}: {
+	title: string;
+	id?: string;
+	setId?: (v: string) => void;
+	idReadOnly?: string;
+	name: string;
+	setName: (v: string) => void;
+	baseUrl: string;
+	setBaseUrl: (v: string) => void;
+	token: string;
+	setToken: (v: string) => void;
+	defaultCwd: string;
+	setDefaultCwd: (v: string) => void;
+	error?: string;
+	saving: boolean;
+	onSave: () => void;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className="p-4">
+			<div className="mb-3 flex items-center justify-between">
+				<h2 className="text-base font-semibold text-ink">{title}</h2>
+				<Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close")}>
+					<X className="h-4 w-4" />
+				</Button>
+			</div>
+			<div className="space-y-3">
+				{idReadOnly ? (
+					<div className="flex items-center gap-2 font-mono text-xs">
+						<span className="text-ink-4">{t("id")}</span>
+						<span className="text-ink">{idReadOnly}</span>
+					</div>
+				) : (
+					<label className="block">
+						<div className="meta mb-1">{t("id")}</div>
+						<input
+							className="field h-9 w-full px-2 font-mono text-sm"
+							value={id ?? ""}
+							onChange={(e) => setId?.(e.target.value)}
+							placeholder="lab"
+						/>
+					</label>
+				)}
+				<label className="block">
+					<div className="meta mb-1">{t("name")}</div>
+					<input
+						className="field h-9 w-full px-2 text-sm"
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						placeholder={t("My lab machine")}
+					/>
+				</label>
+				<label className="block">
+					<div className="meta mb-1">{t("base URL")}</div>
+					<input
+						className="field h-9 w-full px-2 font-mono text-sm"
+						value={baseUrl}
+						onChange={(e) => setBaseUrl(e.target.value)}
+						placeholder="http://100.64.0.2:8790"
+					/>
+				</label>
+				<label className="block">
+					<div className="meta mb-1">{t("token")}</div>
+					<input
+						className="field h-9 w-full px-2 font-mono text-sm"
+						type="password"
+						value={token}
+						onChange={(e) => setToken(e.target.value)}
+						placeholder={t("OMP_AGENT_HOST_TOKEN on the machine")}
+					/>
+				</label>
+				<label className="block">
+					<div className="meta mb-1">{t("default cwd (optional)")}</div>
+					<input
+						className="field h-9 w-full px-2 font-mono text-sm"
+						value={defaultCwd}
+						onChange={(e) => setDefaultCwd(e.target.value)}
+						placeholder="/home/user/projects"
+					/>
+				</label>
+				{error ? (
+					<div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs text-danger">
+						{error}
+					</div>
+				) : null}
+				<div className="flex justify-end gap-2 pt-1">
+					<Button variant="ghost" size="sm" onClick={onClose}>
+						{t("Cancel")}
+					</Button>
+					<Button size="sm" disabled={saving} onClick={onSave}>
+						{t("Save")}
+					</Button>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -305,6 +764,7 @@ function MessagingSection() {
 			<EditEnvModal
 				entry={editing}
 				onClose={() => setEditing(null)}
+				patch={settingsApi.patchEnv}
 				onSaved={(next) => {
 					setData(next);
 					setEditing(null);
@@ -566,10 +1026,12 @@ function EnvTable({
 function EditEnvModal({
 	entry,
 	onClose,
+	patch,
 	onSaved,
 }: {
 	entry: EnvEntry | null;
 	onClose: () => void;
+	patch: (updates: Record<string, string | null>) => Promise<ListEnvSettingsResponse>;
 	onSaved: (next: ListEnvSettingsResponse) => void;
 }) {
 	const { t } = useTranslation();
@@ -589,7 +1051,7 @@ function EditEnvModal({
 		if (!entry) return;
 		setSaving(true);
 		try {
-			const next = await settingsApi.patchEnv({ [entry.key]: nextValue });
+			const next = await patch({ [entry.key]: nextValue });
 			onSaved(next);
 		} catch (e) {
 			setError(String(e));

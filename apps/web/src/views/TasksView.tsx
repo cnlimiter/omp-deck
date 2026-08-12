@@ -16,13 +16,14 @@ import {
 } from "@dnd-kit/sortable";
 import { Settings2 } from "lucide-react";
 
-import type { Task, TaskState } from "@omp-deck/protocol";
+import type { MachineInfo, Task, TaskState } from "@omp-deck/protocol";
 
 import { Layout } from "@/components/Layout";
 import { Column } from "@/components/tasks/Column";
 import { TaskCardBody } from "@/components/tasks/TaskCard";
 import { TaskModal } from "@/components/tasks/TaskModal";
 import { StateConfig } from "@/components/tasks/StateConfig";
+import { machinesApi } from "@/lib/machines-api";
 import { tasksApi } from "@/lib/tasks-api";
 import { useStore } from "@/lib/store";
 
@@ -37,8 +38,24 @@ export function TasksView() {
 
 	const [tasks, setTasks] = useState<Task[]>([]);
 	const [states, setStates] = useState<TaskState[]>([]);
+	const [machines, setMachines] = useState<MachineInfo[]>([]);
 	const [error, setError] = useState<string | undefined>();
 	const [loading, setLoading] = useState(true);
+
+	// agentId → machine name for card badges + open-on-machine labels.
+	// Local tasks get no badge (local is the implicit default).
+	const machineNameById = useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const m of machines) map[m.id] = m.name;
+		return map;
+	}, [machines]);
+
+	useEffect(() => {
+		void machinesApi
+			.list()
+			.then((resp) => setMachines(resp.machines))
+			.catch((err) => console.warn("machines fetch failed", err));
+	}, []);
 
 	const [openTask, setOpenTask] = useState<Task | undefined>();
 	const [showStateConfig, setShowStateConfig] = useState(false);
@@ -256,9 +273,14 @@ export function TasksView() {
 	}
 
 	async function openInChat(task: Task): Promise<void> {
-		const cwd = task.cwd || defaultCwd;
+		// Assigned tasks open on their machine (agentId); the session cwd
+		// prefers the task's own cwd, then the machine's default, then the
+		// deck default.
+		const agentId = task.assignedAgent && task.assignedAgent !== "local" ? task.assignedAgent : undefined;
+		const machine = agentId ? machines.find((m) => m.id === agentId) : undefined;
+		const cwd = task.cwd || machine?.defaultCwd || defaultCwd;
 		try {
-			await createSession({ cwd });
+			await createSession({ cwd, ...(agentId ? { agentId } : {}) });
 		} catch (e) {
 			console.warn("createSession failed; falling back to draft only", e);
 		}
@@ -266,6 +288,17 @@ export function TasksView() {
 			text: `# ${task.title}\n\n${task.body}`.trim(),
 		});
 		navigate("/");
+	}
+
+	async function assignOpenTask(agentId: string | null): Promise<void> {
+		if (!openTask) return;
+		try {
+			const updated = await tasksApi.assign(openTask.id, agentId);
+			setOpenTask(updated);
+			setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+		} catch (e) {
+			setError(String(e));
+		}
 	}
 
 	return (
@@ -320,6 +353,7 @@ export function TasksView() {
 												key={s.id}
 												state={s}
 												tasks={tasksByState[s.id] ?? []}
+												machineNameById={machineNameById}
 												onCreate={(stateId, title) => void onCreate(stateId, title)}
 												onOpen={(t) => setOpenTask(t)}
 												onRenameRequest={() => {
@@ -344,7 +378,15 @@ export function TasksView() {
 								>
 									{draggingTask ? (
 										<div className="w-72 px-2">
-											<TaskCardBody task={draggingTask} lifted />
+											<TaskCardBody
+												task={draggingTask}
+												lifted
+												machineName={
+													draggingTask.assignedAgent
+														? machineNameById[draggingTask.assignedAgent]
+														: undefined
+												}
+											/>
 										</div>
 									) : null}
 									{draggingColumnId ? (() => {
@@ -384,8 +426,10 @@ export function TasksView() {
 			<TaskModal
 				task={openTask ?? null}
 				states={states}
+				machines={machines}
 				onClose={() => setOpenTask(undefined)}
 				onSave={(patch) => void saveTask(patch)}
+				onAssign={(agentId) => void assignOpenTask(agentId)}
 				onDelete={() => void deleteOpenTask()}
 				onArchive={() => void archiveOpenTask()}
 				onOpenInChat={() => openTask && void openInChat(openTask)}

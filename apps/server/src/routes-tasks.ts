@@ -104,6 +104,26 @@ export function buildTasksRouter(): Hono {
 		return c.json({ ok });
 	});
 
+	// Assign (or unassign) a task to an agent host. `agentId: null` clears.
+	app.post("/tasks/:id/assign", async (c) => {
+		let body: { agentId: string | null };
+		try {
+			body = (await c.req.json()) as { agentId: string | null };
+		} catch {
+			return c.json({ error: i18n.t("invalid json") }, 400);
+		}
+		const agentId = typeof body.agentId === "string" ? body.agentId : null;
+		try {
+			const updated = updateTask(c.req.param("id"), { assignedAgent: agentId });
+			if (!updated) return c.json({ error: i18n.t("not found") }, 404);
+			notifyTasksChanged();
+			return c.json(updated);
+		} catch (err) {
+			log.error(`assignTask failed`, err);
+			return c.json({ error: String(err) }, 400);
+		}
+	});
+
 	app.post("/tasks/:id/move", async (c) => {
 		let body: MoveTaskRequest;
 		try {

@@ -44,16 +44,15 @@
  * `#approvePlan`).
  */
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { AgentToolResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import {
 	type PlanApprovalDetails,
-	renameApprovedPlanFile,
 	resolvePlanTitle,
 } from "@oh-my-pi/pi-coding-agent/plan-mode/approved-plan";
-import { type ResolveToolDetails, runResolveInvocation } from "@oh-my-pi/pi-coding-agent/tools/resolve";
 import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
 import type {
 	PendingPlanApprovalWire,
@@ -63,10 +62,9 @@ import type {
 
 import type { PlanApprovalResponse } from "./types.ts";
 
-import { logger } from "../log.ts";
-import i18n from "../i18n.ts";
+import { bridgeLog, bridgeT } from "./bridge-context.ts";
 
-const log = logger("bridge:plan-mode");
+const log = bridgeLog("bridge:plan-mode");
 
 /** Canonical plan file URL. The SDK's `resolve` tool, the TUI, and the
  *  plan-mode system prompt all use this exact path; do not vary per-session. */
@@ -147,6 +145,15 @@ export interface PlanModeSessionSurface {
 	setStandingResolveHandler(
 		handler: ((input: unknown) => Promise<unknown> | unknown) | null,
 	): void;
+	/**
+	 * SDK 17+: plan approval rides the `write xd://propose <title>` device;
+	 * the session dispatches the title to this handler. Absent on SDK 15.
+	 */
+	setPlanProposalHandler?(handler: ((title: string) => Promise<unknown>) | null): void;
+	/** SDK 17+: pin the approved plan path for reference-message bookkeeping. */
+	setPlanReferencePath?(planFilePath: string): void;
+	/** SDK 17+: whether a built-in tool name exists (plan-mode write augmentation). */
+	hasBuiltInTool?(name: string): boolean;
 	markPlanReferenceSent(): void;
 	readonly isStreaming: boolean;
 	prompt(
@@ -165,6 +172,19 @@ export interface PlanModeBridgeArgs {
 }
 
 /** Bridge over the SDK's plan-mode primitives, scoped to one session. */
+/**
+ * SDK 15's `ResolveToolDetails` result shape, declared locally so the
+ * resolve path doesn't need the version-gated type import.
+ */
+interface ResolveToolDetailsWire {
+	action: "apply" | "discard";
+	reason: string;
+	sourceToolName?: string;
+	label?: string;
+	extra?: Record<string, unknown>;
+	sourceResultDetails?: unknown;
+}
+
 export class PlanModeBridge {
 	private readonly sessionId: string;
 	private readonly session: PlanModeSessionSurface;
@@ -177,12 +197,19 @@ export class PlanModeBridge {
 	private previousTools: string[] = [];
 	private pendingApproval: PendingApproval | undefined;
 	private disposed = false;
+	/**
+	 * SDK 17+ exposes `setPlanProposalHandler` (xd://propose device) instead
+	 * of SDK 15's `setStandingResolveHandler` + `runResolveInvocation`.
+	 * Feature-detected at construction; both paths share the approval UI.
+	 */
+	private readonly sdk17: boolean;
 
 	constructor(args: PlanModeBridgeArgs) {
 		this.sessionId = args.sessionId;
 		this.session = args.session;
 		this.getArtifactsDir = args.getArtifactsDir;
 		this.getSessionId = args.getSessionId;
+		this.sdk17 = typeof args.session.setPlanProposalHandler === "function";
 	}
 
 	// ─── Snapshot + replay surface (consumed by InProcessAgentBridge) ─────
@@ -253,21 +280,45 @@ export class PlanModeBridge {
 		if (this.disposed || this.enabled) return;
 
 		const previousTools = this.session.getActiveToolNames();
-		const planTools = previousTools.includes(RESOLVE_TOOL)
-			? previousTools
-			: [...previousTools, RESOLVE_TOOL];
-		await this.session.setActiveToolsByName(planTools);
+		if (this.sdk17) {
+			// SDK 17: plan approval rides the `write xd://propose <title>`
+			// device, so the tool set is augmented with `write` (when missing)
+			// and the propose handler is installed instead of a resolve handler.
+			const writeMissing =
+				typeof this.session.hasBuiltInTool === "function" &&
+				this.session.hasBuiltInTool("write") &&
+				!previousTools.includes("write");
+			const planTools = writeMissing ? [...previousTools, "write"] : previousTools;
+			if (planTools !== previousTools) {
+				await this.session.setActiveToolsByName(planTools);
+			}
+			this.previousTools = previousTools;
+			this.planFilePath = PLAN_FILE_URL;
+			this.enabled = true;
 
-		this.previousTools = previousTools;
-		this.planFilePath = PLAN_FILE_URL;
-		this.enabled = true;
+			this.session.setPlanModeState({
+				enabled: true,
+				planFilePath: this.planFilePath,
+				workflow: PLAN_WORKFLOW,
+			});
+			this.session.setPlanProposalHandler?.((title) => this.#handlePlanProposal(title));
+		} else {
+			const planTools = previousTools.includes(RESOLVE_TOOL)
+				? previousTools
+				: [...previousTools, RESOLVE_TOOL];
+			await this.session.setActiveToolsByName(planTools);
 
-		this.session.setPlanModeState({
-			enabled: true,
-			planFilePath: this.planFilePath,
-			workflow: PLAN_WORKFLOW,
-		});
-		this.session.setStandingResolveHandler((input) => this.#handlePlanResolve(input));
+			this.previousTools = previousTools;
+			this.planFilePath = PLAN_FILE_URL;
+			this.enabled = true;
+
+			this.session.setPlanModeState({
+				enabled: true,
+				planFilePath: this.planFilePath,
+				workflow: PLAN_WORKFLOW,
+			});
+			this.session.setStandingResolveHandler((input) => this.#handlePlanResolve(input));
+		}
 
 		this.#broadcast({
 			type: "plan_mode_changed",
@@ -299,8 +350,8 @@ export class PlanModeBridge {
 			if (reason === "user_cancelled" || reason === "session_disposed") {
 				const message =
 					reason === "user_cancelled"
-						? i18n.t("Plan approval cancelled: user exited plan mode.")
-						: i18n.t("Plan approval abandoned: session disposed.");
+						? bridgeT("Plan approval cancelled: user exited plan mode.")
+						: bridgeT("Plan approval abandoned: session disposed.");
 				pending.reject(new Error(message));
 				this.#broadcast({
 					type: "plan_proposal_resolved",
@@ -319,7 +370,11 @@ export class PlanModeBridge {
 					log.warn(`tool restore failed during exit for ${this.sessionId}`, err);
 				}
 			}
-			this.session.setStandingResolveHandler(null);
+			if (this.sdk17) {
+				this.session.setPlanProposalHandler?.(null);
+			} else {
+				this.session.setStandingResolveHandler(null);
+			}
 			this.session.setPlanModeState(undefined);
 			this.enabled = false;
 			this.previousTools = [];
@@ -384,19 +439,31 @@ export class PlanModeBridge {
 	 * content + details; the deferred `session.prompt(..., followUp)` then
 	 * starts a fresh turn that executes the approved plan.
 	 */
-	#handlePlanResolve(input: unknown): Promise<AgentToolResult<ResolveToolDetails>> {
-		return runResolveInvocation(input as Parameters<typeof runResolveInvocation>[0], {
+	#handlePlanResolve(input: unknown): Promise<AgentToolResult<ResolveToolDetailsWire>> {
+		// `runResolveInvocation` is an SDK 15-only export; SDK 17+ removed the
+		// resolve tool in favor of xd:// devices, so the module is loaded
+		// lazily and only reached on the SDK 15 path (platform-version-gated).
+		return this.#runResolve15(input);
+	}
+
+	async #runResolve15(input: unknown): Promise<AgentToolResult<ResolveToolDetailsWire>> {
+		const resolveModule = await import("@oh-my-pi/pi-coding-agent/tools/resolve");
+		const runResolve = resolveModule.runResolveInvocation;
+		if (typeof runResolve !== "function") {
+			throw new ToolError(bridgeT("resolve invocation is not available on this SDK build"));
+		}
+		return runResolve(input as Parameters<typeof runResolve>[0], {
 			sourceToolName: "plan_approval",
-			label: i18n.t("Plan ready for approval"),
+			label: bridgeT("Plan ready for approval"),
 			apply: async (_reason, extra) => {
 				if (!this.enabled) {
-					throw new ToolError(i18n.t("Plan mode is not active."));
+					throw new ToolError(bridgeT("Plan mode is not active."));
 				}
 
 				const planContent = await this.#readPlanFile(this.planFilePath);
 				if (planContent === null) {
 					throw new ToolError(
-						i18n.t("Plan file not found at {{path}}. Write the finalized plan before requesting approval.", {
+						bridgeT("Plan file not found at {{path}}. Write the finalized plan before requesting approval.", {
 							path: this.planFilePath,
 						}),
 					);
@@ -450,7 +517,7 @@ export class PlanModeBridge {
 						content: [
 							{
 								type: "text" as const,
-								text: i18n.t("User rejected the plan. Plan mode disabled; do not auto-execute."),
+								text: bridgeT("User rejected the plan. Plan mode disabled; do not auto-execute."),
 							},
 						],
 						details: {
@@ -473,6 +540,9 @@ export class PlanModeBridge {
 
 				const finalPlanFilePath = sanitizeFinalPath(userResponse.finalPath) ?? suggestedFinalPath;
 
+				// SDK 15-only export (SDK 17 never renames — the plan stays at
+				// its file and `setPlanReferencePath` pins it instead).
+				const { renameApprovedPlanFile } = await import("@oh-my-pi/pi-coding-agent/plan-mode/approved-plan");
 				await renameApprovedPlanFile({
 					planFilePath: planFilePathAtApproval,
 					finalPlanFilePath,
@@ -513,7 +583,7 @@ export class PlanModeBridge {
 					content: [
 						{
 							type: "text" as const,
-							text: i18n.t("Plan approved. Executing from {{path}}.", {
+							text: bridgeT("Plan approved. Executing from {{path}}.", {
 								path: finalPlanFilePath,
 							}),
 						},
@@ -527,6 +597,186 @@ export class PlanModeBridge {
 				};
 			},
 		});
+	}
+
+	/**
+	 * SDK 17+ propose-device handler. The session dispatches the agent's
+	 * `write xd://propose <title>` payload here while plan mode is active.
+	 * Mirrors the resolve path's approval UI: locate the plan file, derive
+	 * the title, broadcast `plan_proposed`, block on the deck's response,
+	 * then either exit-rejected or pin the plan reference + queue the
+	 * approved-prompt (SDK 17 never renames the plan file).
+	 */
+	async #handlePlanProposal(title: string): Promise<AgentToolResult<unknown>> {
+		if (!this.enabled) {
+			throw new ToolError(bridgeT("Plan mode is not active."));
+		}
+		const found = await this.#findPlanFile(title);
+		if (!found) {
+			throw new ToolError(
+				bridgeT("Plan file not found at {{path}}. Write the finalized plan before requesting approval.", {
+					path: this.planFilePath,
+				}),
+			);
+		}
+		const { planFilePath, planContent } = found;
+		const normalized = resolvePlanTitle({
+			suppliedTitle: title,
+			planContent,
+			planFilePath,
+		});
+		// SDK 17 semantics: the plan stays at its original file — no rename,
+		// so the execution path is always the plan's own path (a user
+		// finalPath override has no rename mechanism to apply it to).
+		const suggestedFinalPath = planFilePath;
+		const proposalId = this.#allocateProposalId();
+
+		// Block on user approval. Stash the proposal so reconnects can replay
+		// it and a parallel `set_plan_mode(false)` can reject it.
+		const userResponse = await new Promise<PlanApprovalResponse>((resolve, reject) => {
+			this.pendingApproval = {
+				proposalId,
+				planFilePath,
+				planContent,
+				suggestedTitle: normalized.title,
+				suggestedFinalPath,
+				resolve,
+				reject,
+			};
+			this.#broadcast({
+				type: "plan_proposed",
+				sessionId: this.sessionId,
+				proposalId,
+				planFilePath,
+				planContent,
+				suggestedTitle: normalized.title,
+				suggestedFinalPath,
+			});
+		});
+
+		this.pendingApproval = undefined;
+		// Edits + reference pin + result details must target the LOCATED plan
+		// file (possibly `<slug>-plan.md`), not the state default PLAN.md —
+		// otherwise a user edit is written to a file that may not exist.
+		const planFilePathAtApproval = planFilePath;
+		const finalPlanFilePath = suggestedFinalPath;
+
+		if (!userResponse.approved) {
+			this.#broadcast({
+				type: "plan_proposal_resolved",
+				sessionId: this.sessionId,
+				proposalId,
+				outcome: "rejected",
+			});
+			await this.exit("rejected");
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: bridgeT("User rejected the plan. Plan mode disabled; do not auto-execute."),
+					},
+				],
+				details: {
+					planFilePath: planFilePathAtApproval,
+					finalPlanFilePath,
+					title: normalized.title,
+					planExists: true,
+				} satisfies PlanApprovalDetails,
+			};
+		}
+
+		// Approve path: optionally write edited content, exit plan mode, pin
+		// the plan reference, queue the synthetic approved-prompt.
+		let finalContent = planContent;
+		if (typeof userResponse.editedContent === "string") {
+			await this.#writePlanFile(planFilePathAtApproval, userResponse.editedContent);
+			finalContent = userResponse.editedContent;
+		}
+
+		this.#broadcast({
+			type: "plan_proposal_resolved",
+			sessionId: this.sessionId,
+			proposalId,
+			outcome: "approved",
+		});
+
+		await this.exit("approved");
+
+		this.session.setPlanReferencePath?.(planFilePathAtApproval);
+		this.session.markPlanReferenceSent();
+		const approvedPrompt = renderApprovedPrompt({
+			planContent: finalContent,
+			finalPlanFilePath,
+		});
+
+		void this.session
+			.prompt(approvedPrompt, { streamingBehavior: "followUp" })
+			.catch((err) => {
+				log.warn(`synthetic approved-plan prompt failed for ${this.sessionId}`, err);
+			});
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: bridgeT("Plan approved. Executing from {{path}}.", {
+						path: finalPlanFilePath,
+					}),
+				},
+			],
+			details: {
+				planFilePath: planFilePathAtApproval,
+				finalPlanFilePath,
+				title: stripMdExtension(extractFileName(finalPlanFilePath)),
+				planExists: true,
+			} satisfies PlanApprovalDetails,
+		};
+	}
+
+	/**
+	 * Locate the agent's plan file (SDK 17 semantics): title-slug candidate
+	 * first (`local://<slug>-plan.md`), then scanned `*plan.md` files
+	 * newest-first, then the state plan path as fallback. Returns the file
+	 * with its content; null when nothing exists.
+	 */
+	async #findPlanFile(
+		title: string,
+	): Promise<{ planFilePath: string; planContent: string } | null> {
+		const slugUrl = planSlugUrl(title);
+		const listed = await this.#listPlanFiles();
+		const candidates = [slugUrl, ...listed, this.planFilePath].filter(
+			(url, idx, arr) => url && arr.indexOf(url) === idx,
+		);
+		for (const url of candidates) {
+			if (!url) continue;
+			const content = await this.#readPlanFile(url);
+			if (content !== null) return { planFilePath: url, planContent: content };
+		}
+		return null;
+	}
+
+	/** `local://` URLs of plan files in the session-local root, newest first. */
+	async #listPlanFiles(): Promise<string[]> {
+		const localRoot = resolveLocalUrlToPath("local://", {
+			getArtifactsDir: this.getArtifactsDir,
+			getSessionId: this.getSessionId,
+		});
+		const entries = await fs.readdir(localRoot, { withFileTypes: true });
+		const candidates = entries.filter(
+			(e) => e.isFile() && e.name.toLowerCase().endsWith("plan.md"),
+		);
+		const withMtime = await Promise.all(
+			candidates.map(async (e) => {
+				try {
+					const st = await fs.stat(path.join(localRoot, e.name));
+					return { name: e.name, mtime: st.mtimeMs };
+				} catch {
+					return { name: e.name, mtime: 0 };
+				}
+			}),
+		);
+		withMtime.sort((a, b) => b.mtime - a.mtime);
+		return withMtime.map((f) => `local://${f.name}`);
 	}
 
 	async #readPlanFile(planFilePath: string): Promise<string | null> {
@@ -591,6 +841,21 @@ function sanitizeFinalPath(input: string | undefined): string | undefined {
 
 function extractFileName(localUrl: string): string {
 	return localUrl.replace(/^local:\/+/, "").split(/[\\/]/).pop() ?? "";
+}
+
+/**
+ * Title → `local://<slug>-plan.md` (SDK 17's propose-device convention).
+ * Mirrors the SDK's slug rules: lowercase ASCII, runs of non-alphanumerics
+ * collapsed to a single hyphen, trimmed at both ends.
+ */
+function planSlugUrl(title: string): string | undefined {
+	const slug = title
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	if (!slug) return undefined;
+	return `local://${slug}-plan.md`;
 }
 
 function stripMdExtension(fileName: string): string {

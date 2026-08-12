@@ -8,13 +8,14 @@ import type {
 	UpdateTaskRequest,
 	UpdateTaskStateRequest,
 } from "@omp-deck/protocol";
+import { authHeaders } from "./api";
 
 const BASE = "/api";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
-		headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+		headers: { "content-type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
 	});
 	if (!res.ok) {
 		const body = await res.text().catch(() => "");
@@ -35,6 +36,12 @@ export const tasksApi = {
 		return req<Task>(`/tasks/${encodeURIComponent(id)}`, {
 			method: "PATCH",
 			body: JSON.stringify(body),
+		});
+	},
+	assign(id: string, agentId: string | null): Promise<Task> {
+		return req<Task>(`/tasks/${encodeURIComponent(id)}/assign`, {
+			method: "POST",
+			body: JSON.stringify({ agentId }),
 		});
 	},
 	remove(id: string): Promise<{ ok: boolean }> {

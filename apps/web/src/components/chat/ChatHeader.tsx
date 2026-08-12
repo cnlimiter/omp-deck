@@ -28,6 +28,12 @@ function Inner({ session }: { session: SessionUi }) {
 	const selectSession = useStore((s) => s.selectSession);
 	const defaultCwd = useStore((s) => s.defaultCwd);
 	const sessionsById = useStore((s) => s.sessionsById);
+	const sessions = useStore((s) => s.sessions);
+	const activeId = useStore((s) => s.activeId);
+	// Remote sessions carry agentName on their summary (the snapshot has no
+	// machine attribution) — surface it as a badge next to the title.
+	const activeSummary = activeId ? sessions.find((s) => s.id === activeId) : undefined;
+	const agentName = activeSummary?.agentName;
 
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState(session.sessionName ?? "");
@@ -139,6 +145,15 @@ function Inner({ session }: { session: SessionUi }) {
 					{session.sessionName || t("Untitled · {{id}}", { id: shortId(session.sessionId) })}
 				</button>
 			)}
+
+			{agentName ? (
+				<span
+					className="hidden h-6 shrink-0 items-center rounded-md border border-accent/40 bg-accent/10 px-1.5 font-mono text-2xs uppercase tracking-meta text-accent sm:flex"
+					title={activeSummary?.agentId}
+				>
+					{agentName}
+				</span>
+			) : null}
 
 			{session.planMode?.enabled ? (
 				<span

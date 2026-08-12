@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, MessageSquarePlus, RotateCcw, Trash2, X } from "lucide-react";
-import type { Task, TaskState } from "@omp-deck/protocol";
+import type { MachineInfo, Task, TaskState } from "@omp-deck/protocol";
 
 import { MarkdownEdit } from "@/components/MarkdownEdit";
 import { Modal } from "@/components/ui/Modal";
@@ -10,8 +10,10 @@ import { cn } from "@/lib/utils";
 interface Props {
 	task: Task | null;
 	states: TaskState[];
+	machines: MachineInfo[];
 	onClose: () => void;
 	onSave: (patch: { title?: string; body?: string; stateId?: string; cwd?: string }) => void;
+	onAssign: (agentId: string | null) => void;
 	onDelete: () => void;
 	onArchive: () => void;
 	onOpenInChat: () => void;
@@ -26,8 +28,10 @@ interface Props {
 export function TaskModal({
 	task,
 	states,
+	machines,
 	onClose,
 	onSave,
+	onAssign,
 	onDelete,
 	onArchive,
 	onOpenInChat,
@@ -136,6 +140,23 @@ export function TaskModal({
 							placeholder={t("(defaults to server cwd)")}
 							className="w-full bg-transparent font-mono text-2xs text-ink placeholder:text-ink-4 focus:outline-none"
 						/>
+					</span>
+					<span className="text-ink-4">{t("assigned to")}</span>
+					<span className="col-span-3">
+						<select
+							value={task.assignedAgent ?? ""}
+							onChange={(e) => onAssign(e.target.value === "" ? null : e.target.value)}
+							className="field h-6 w-full px-1.5 font-mono text-2xs"
+							title={t("Which agent host runs this task")}
+						>
+							<option value="">{t("(unassigned)")}</option>
+							<option value="local">{t("this machine (local)")}</option>
+							{machines.map((m) => (
+								<option key={m.id} value={m.id}>
+									{m.name} ({m.id})
+								</option>
+							))}
+						</select>
 					</span>
 					{isArchived ? (
 						<>

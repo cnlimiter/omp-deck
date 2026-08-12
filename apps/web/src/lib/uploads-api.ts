@@ -8,6 +8,8 @@
  *
  * Response shape mirrors the server's `SavedUpload`.
  */
+import { authHeaders } from "./api";
+
 const BASE = "/api";
 
 export interface UploadedImage {
@@ -20,6 +22,7 @@ export interface UploadedImage {
 export async function uploadImage(blob: Blob, name?: string): Promise<UploadedImage> {
 	const headers: Record<string, string> = {
 		"content-type": blob.type || "application/octet-stream",
+		...authHeaders(),
 	};
 	if (name) headers["x-upload-name"] = encodeURIComponent(name);
 

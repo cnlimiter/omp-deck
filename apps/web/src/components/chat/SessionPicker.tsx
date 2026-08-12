@@ -38,6 +38,11 @@ export function SessionPicker() {
 		return { live, persisted };
 	}, [sessions, sessionsById]);
 
+	// SessionUi snapshots carry no machine attribution; the summaries do.
+	function liveAgentName(sessionId: string): string | undefined {
+		return sessions.find((s) => s.id === sessionId)?.agentName;
+	}
+
 	async function startFresh(): Promise<void> {
 		setBusy(true);
 		try {
@@ -127,6 +132,11 @@ export function SessionPicker() {
 										/>
 										<span className="flex-1 truncate text-ink">
 											{s.sessionName || formatSessionId(s.sessionId)}
+											{liveAgentName(s.sessionId) ? (
+												<span className="font-mono text-2xs text-accent">
+													{" @"}{liveAgentName(s.sessionId)}
+												</span>
+											) : null}
 										</span>
 										<span className="font-mono text-2xs text-ink-3">
 											{shortPath(s.cwd, 32)}
@@ -147,7 +157,11 @@ export function SessionPicker() {
 								<li key={s.id}>
 									<button
 										type="button"
-										onClick={() => void resume(s)}
+										onClick={() =>
+											s.agentId && s.agentId !== "local"
+												? selectSession(s.id)
+												: void resume(s)
+										}
 										disabled={busy}
 										className={cn(
 											"group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm",
@@ -157,6 +171,11 @@ export function SessionPicker() {
 										<Clock className="h-3.5 w-3.5 shrink-0 text-ink-4" />
 										<span className="flex-1 truncate text-ink">
 											{s.title || formatSessionId(s.id)}
+											{s.agentName ? (
+												<span className="font-mono text-2xs text-accent">
+													{" @"}{s.agentName}
+												</span>
+											) : null}
 										</span>
 										<span className="font-mono text-2xs text-ink-4">
 											{shortPath(s.cwd, 24)} ·{" "}

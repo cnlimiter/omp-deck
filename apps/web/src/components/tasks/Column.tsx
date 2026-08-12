@@ -14,6 +14,7 @@ import { TaskCard } from "./TaskCard";
 interface Props {
 	state: TaskState;
 	tasks: Task[];
+	machineNameById: Record<string, string>;
 	onCreate: (stateId: string, title: string) => void;
 	onOpen: (task: Task) => void;
 	onRenameRequest?: (state: TaskState) => void;
@@ -38,6 +39,7 @@ interface Props {
 export function Column({
 	state,
 	tasks,
+	machineNameById,
 	onCreate,
 	onOpen,
 	onRenameRequest,
@@ -129,7 +131,12 @@ export function Column({
 				<SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
 					<div className="flex flex-col gap-1.5">
 						{tasks.map((t) => (
-							<TaskCard key={t.id} task={t} onOpen={onOpen} />
+							<TaskCard
+								key={t.id}
+								task={t}
+								onOpen={onOpen}
+								machineName={t.assignedAgent ? machineNameById[t.assignedAgent] : undefined}
+							/>
 						))}
 					</div>
 				</SortableContext>

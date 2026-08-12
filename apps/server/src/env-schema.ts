@@ -125,6 +125,15 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		description: "omp SDK session/auth data directory.",
 	},
 	{
+		key: "OMP_DECK_MACHINES_FILE",
+		valueType: "path",
+		sensitive: false,
+		restartRequired: false,
+		hotApply: false,
+		description:
+			"Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).",
+	},
+	{
 		key: "LOG_LEVEL",
 		defaultValue: "info",
 		valueType: "enum",
@@ -201,6 +210,15 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		restartRequired: true,
 		hotApply: false,
 		description: "Server message language (en | zh). Restart the server to apply.",
+	},
+	{
+		key: "OMP_DECK_ACCESS_TOKEN",
+		valueType: "string",
+		sensitive: true,
+		restartRequired: true,
+		hotApply: false,
+		description:
+			"Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.",
 	},
 	{
 		key: "OMP_DECK_MAINTENANCE_GATE_DISABLED",

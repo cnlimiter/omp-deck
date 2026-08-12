@@ -14,6 +14,10 @@ import type { Server, ServerWebSocket } from "bun";
 import * as path from "node:path";
 
 import { InProcessAgentBridge } from "./bridge/in-process.ts";
+import { MultiAgentBridge } from "./bridge/multi.ts";
+import { setBridgeContext } from "../../agent-host/src/bridge/bridge-context.ts";
+import { loadMachines } from "./machines.ts";
+import i18n from "./i18n.ts";
 import { RoutinesRunner } from "./routines-runner.ts";
 import { closeDb, openDb } from "./db/index.ts";
 import { loadConfig } from "./config.ts";
@@ -100,10 +104,21 @@ async function main(): Promise<void> {
 	notificationService.register(new BrowserNotificationChannel());
 
 
-	const bridge = new InProcessAgentBridge({
+	// Route the shared session-core modules (session-core / plan-mode-bridge /
+	// ext-ui-bridge) through the deck's own i18n + logger, so deck behavior is
+	// identical to the pre-extraction code. The remote agent-host extension
+	// never calls this and runs on the built-in English/console defaults.
+	setBridgeContext({
+		t: (key, vars) => i18n.t(key, vars ?? {}),
+		logFactory: (scope) => logger(scope),
+	});
+
+	const localBridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,
 		autoStartCommand: config.autoStartCommand,
 	});
+	const machinesRegistry = loadMachines();
+	const bridge = new MultiAgentBridge({ local: localBridge, machines: machinesRegistry });
 	const routinesRunner = new RoutinesRunner();
 	routinesRunner.start();
 	let server: Server<ConnectionData>;
@@ -119,11 +134,29 @@ async function main(): Promise<void> {
 		marketplaceService,
 		skillsService,
 		kbService,
-		{ restartServer: () => scheduleRestart(server) },
+		{
+			restartServer: () => scheduleRestart(server),
+			machines: { registry: machinesRegistry, bridge },
+		},
 	);
 	const skillsWatcherDispose = startSkillsWatcher(config);
 	const kbWatcherDispose = startKbWatcher(kbService);
 	const ws = new WsHub(bridge);
+
+	// Public-deployment gate (D1): when OMP_DECK_ACCESS_TOKEN is set, every
+	// /api and /ws request must carry `Authorization: Bearer <token>` (WS may
+	// pass `?token=` instead — the web client has no header control there).
+	// /api/health + /api/version stay open for liveness probes; static assets
+	// are exempt (they carry no data). Unset = loopback behavior unchanged.
+	const accessToken = (process.env.OMP_DECK_ACCESS_TOKEN ?? "").trim();
+	const unauthorized = (): Response =>
+		Response.json({ error: i18n.t("unauthorized") }, { status: 401 });
+	const isAuthorized = (req: Request): boolean => {
+		if (!accessToken) return true;
+		const header = req.headers.get("authorization");
+		if (header === `Bearer ${accessToken}`) return true;
+		return false;
+	};
 
 	server = Bun.serve<ConnectionData>({
 		hostname: config.host,
@@ -132,6 +165,11 @@ async function main(): Promise<void> {
 			const url = new URL(req.url);
 
 			if (url.pathname === "/ws") {
+				if (accessToken) {
+					const viaHeader = req.headers.get("authorization") === `Bearer ${accessToken}`;
+					const viaQuery = url.searchParams.get("token") === accessToken;
+					if (!viaHeader && !viaQuery) return unauthorized();
+				}
 				const data = ws.createConnectionData();
 				const upgraded = srv.upgrade(req, { data });
 				if (upgraded) return undefined;
@@ -139,6 +177,10 @@ async function main(): Promise<void> {
 			}
 
 			if (url.pathname.startsWith("/api/")) {
+				if (accessToken) {
+					const exempt = url.pathname === "/api/health" || url.pathname === "/api/version";
+					if (!exempt && !isAuthorized(req)) return unauthorized();
+				}
 				const trimmed = new URL(req.url);
 				trimmed.pathname = url.pathname.slice(4) || "/";
 				return router.fetch(new Request(trimmed.toString(), req));
@@ -149,6 +191,10 @@ async function main(): Promise<void> {
 			// written markdown. Stream the file straight off disk; reject path
 			// traversal the same way the SPA static handler does.
 			if (url.pathname.startsWith("/uploads/")) {
+				// With an access token configured, uploads carry data and are
+				// API-adjacent — gate them too (the web client's upload helper
+				// attaches the bearer header).
+				if (accessToken && !isAuthorized(req)) return unauthorized();
 				return serveUpload(req, config.uploadsRoot);
 			}
 

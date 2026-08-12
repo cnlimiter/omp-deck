@@ -33,6 +33,10 @@ export interface SessionSummary {
 	createdAt: string;
 	updatedAt: string;
 	messageCount: number;
+	/** Which agent host owns this session. `"local"` = the deck's own in-process bridge. */
+	agentId: string;
+	/** Human-readable machine name (from the deck's machines registry), when not local. */
+	agentName?: string;
 }
 
 export interface WorkspaceEntry {
@@ -47,6 +51,8 @@ export interface CreateSessionRequest {
 	model?: ModelRef;
 	/** Do not fire the configured auto-start prompt when this creates a fresh session. */
 	suppressAutoStart?: boolean;
+	/** Agent host to run the session on. Omitted or `"local"` = the deck's in-process bridge. */
+	agentId?: string;
 }
 
 export interface CreateSessionResponse {
@@ -66,6 +72,40 @@ export interface ListSessionsResponse {
 export interface ListWorkspacesResponse {
 	workspaces: WorkspaceEntry[];
 	defaultCwd: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Remote agent hosts (multi-machine)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One registered remote omp agent host. `online` is live health-derived. */
+export interface MachineInfo {
+	id: string;
+	name: string;
+	baseUrl: string;
+	online: boolean;
+	modelCount?: number;
+	sessionCount?: number;
+	defaultCwd?: string;
+}
+
+export interface ListMachinesResponse {
+	machines: MachineInfo[];
+}
+
+export interface RegisterMachineRequest {
+	id: string;
+	name: string;
+	baseUrl: string;
+	token: string;
+	defaultCwd?: string;
+}
+
+export interface UpdateMachineRequest {
+	name?: string;
+	baseUrl?: string;
+	token?: string;
+	defaultCwd?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1076,6 +1116,28 @@ export type ServerFrame =
 	  }
 	| { type: "error"; sessionId?: string; error: string };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent-host wire frames (center deck ↔ remote omp host)
+// ─────────────────────────────────────────────────────────────────────────────
+// The host reuses the session protocol verbatim: every ClientFrame/ServerFrame
+// that does not name a `connectionId` is forwarded across the host link as-is.
+// The only additions are the auth handshake and a subscription echo carrying
+// the host's machineId (the center routes a client's subscription on the same
+// session to the owning host via its WS connection).
+
+/**
+ * Client → host. `auth` MUST be the first frame on a fresh connection; the
+ * host rejects any other first frame and closes. The token matches the
+ * `Authorization: Bearer` header used for REST.
+ */
+export type HostClientFrame = ClientFrame | { type: "auth"; token: string };
+
+/** Host → client. `host_ready` acknowledges the auth handshake. */
+export type HostServerFrame =
+	| ServerFrame
+	| { type: "host_ready"; machineId: string }
+	| { type: "host_error"; message: string };
+
 /** Severity for a deck notification. Drives the audio tone + visual styling. */
 export type NotificationLevel = "info" | "warn" | "error" | "critical";
 
@@ -1150,6 +1212,11 @@ export interface Task {
 	 */
 	stateEnteredAt: string;
 	archivedAt?: string;
+	/**
+	 * Agent host this task is assigned to (`null` = unassigned). Matches the
+	 * deck's machines registry id; `"local"` = the deck's own machine.
+	 */
+	assignedAgent: string | null;
 }
 
 export interface CreateTaskRequest {
@@ -1157,6 +1224,7 @@ export interface CreateTaskRequest {
 	body?: string;
 	stateId?: string;
 	cwd?: string;
+	assignedAgent?: string | null;
 }
 
 export interface UpdateTaskRequest {
@@ -1166,6 +1234,7 @@ export interface UpdateTaskRequest {
 	orderInState?: number;
 	cwd?: string;
 	archived?: boolean;
+	assignedAgent?: string | null;
 }
 
 export interface ListTasksResponse {

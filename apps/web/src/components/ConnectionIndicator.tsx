@@ -51,6 +51,7 @@ export function ConnectionIndicator(): JSX.Element {
 	const { t } = useTranslation();
 	const heartbeat = useStore((s) => s.heartbeat);
 	const wsStatus = useStore((s) => s.wsStatus);
+	const unauthorized = useStore((s) => s.unauthorized);
 	const [now, setNow] = useState(Date.now());
 
 	useEffect(() => {
@@ -60,8 +61,9 @@ export function ConnectionIndicator(): JSX.Element {
 
 	const gap = heartbeat ? now - heartbeat.lastReceivedAtMs : Infinity;
 	const color = classify(gap, heartbeat !== null);
-	const label =
-		color === "green"
+	const label = unauthorized
+		? t("unauthorized")
+		: color === "green"
 			? t("connected")
 			: color === "yellow"
 				? t("reconnecting")
@@ -69,7 +71,9 @@ export function ConnectionIndicator(): JSX.Element {
 					? t("no heartbeat yet")
 					: t("disconnected");
 
-	const tooltip = heartbeat
+	const tooltip = unauthorized
+		? t("The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Set it in Settings → Environment or the browser console via localStorage.setItem('omp-deck:access-token', '<token>').")
+		: heartbeat
 		? [
 				t("status: {{value}}", { value: label }),
 				t("ws: {{value}}", { value: wsStatus }),

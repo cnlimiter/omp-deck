@@ -11,14 +11,56 @@ import type {
 
 const BASE = "/api";
 
+/** localStorage key holding the deck access token (OMP_DECK_ACCESS_TOKEN). */
+export const ACCESS_TOKEN_KEY = "omp-deck:access-token";
+
+export function getAccessToken(): string {
+	return localStorage.getItem(ACCESS_TOKEN_KEY) ?? "";
+}
+
+export function setAccessToken(token: string): void {
+	if (token) localStorage.setItem(ACCESS_TOKEN_KEY, token);
+	else localStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
+/** Authorization header for the deck access token, when one is stored. */
+export function authHeaders(): Record<string, string> {
+	const token = getAccessToken();
+	return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+type UnauthorizedListener = () => void;
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
+/** The store subscribes to surface the "unauthorized" connection state. */
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+	unauthorizedListeners.add(listener);
+	return () => {
+		unauthorizedListeners.delete(listener);
+	};
+}
+
+function notifyUnauthorized(): void {
+	for (const listener of unauthorizedListeners) {
+		try {
+			listener();
+		} catch (err) {
+			console.warn("unauthorized listener threw", err);
+		}
+	}
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+	const token = getAccessToken();
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
 		headers: {
 			"content-type": "application/json",
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
 			...(init?.headers ?? {}),
 		},
 	});
+	if (res.status === 401) notifyUnauthorized();
 	if (!res.ok) {
 		let body: string;
 		try {

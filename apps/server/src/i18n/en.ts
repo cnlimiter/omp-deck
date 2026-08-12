@@ -192,4 +192,7 @@ export default {
 	"wrote {{bytes}} bytes to {{target}} (append)": "wrote {{bytes}} bytes to {{target}} (append)",
 	"{{failed}} step(s) failed out of {{total}}": "{{failed}} step(s) failed out of {{total}}",
 	"{{field}} must be a positive integer or null": "{{field}} must be a positive integer or null",
+	"unauthorized": "unauthorized",
+	"Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).": "Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).",
+	"Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.": "Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.",
 };

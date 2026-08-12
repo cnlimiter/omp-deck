@@ -33,6 +33,7 @@ COPY package.json bun.lock* tsconfig.base.json ./
 COPY packages/protocol/package.json packages/protocol/
 COPY apps/web/package.json apps/web/
 COPY apps/server/package.json apps/server/
+COPY apps/agent-host/package.json apps/agent-host/
 COPY apps/bridges/telegram/package.json apps/bridges/telegram/
 RUN bun install --frozen-lockfile
 
@@ -52,6 +53,7 @@ COPY package.json bun.lock* tsconfig.base.json ./
 COPY packages/protocol/package.json packages/protocol/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/agent-host/package.json apps/agent-host/
 COPY apps/bridges/telegram/package.json apps/bridges/telegram/
 
 RUN bun install --frozen-lockfile --production

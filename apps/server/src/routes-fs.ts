@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import type { FilePathMatch, ListFilePathsResponse } from "@omp-deck/protocol";
 
+import i18n from "./i18n";
 import { logger } from "./log.ts";
 
 const log = logger("fs-complete");
@@ -29,14 +30,14 @@ export function buildFsRouter(): Hono {
 		const limit = clampInt(c.req.query("limit"), 20, 1, 100);
 
 		if (!cwd || !path.isAbsolute(cwd)) {
-			return c.json({ error: "cwd query param must be an absolute path" }, 400);
+			return c.json({ error: i18n.t("cwd query param must be an absolute path") }, 400);
 		}
 		// Refuse cwds that resolve outside the user's home or a configured
 		// workspace root — loopback-only is the *transport*, not the
 		// authorization. A bug in another route shouldn't let the picker walk
 		// `C:\Windows`.
 		if (!isCwdAllowed(cwd)) {
-			return c.json({ error: "cwd is not under an allowed root" }, 403);
+			return c.json({ error: i18n.t("cwd is not under an allowed root") }, 403);
 		}
 
 		const cached = inventoryCache.get(cwd);

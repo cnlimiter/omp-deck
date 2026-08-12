@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Download, Loader2, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import type {
 	ListMarketplaceResponse,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 type ScopeFilter = "all" | "installed" | "available";
 
 export function MarketplaceView() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<ListMarketplaceResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | undefined>();
@@ -142,9 +144,9 @@ export function MarketplaceView() {
 				main={
 					<div className="flex h-full min-h-0 flex-col">
 						<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-							<div className="meta">Marketplace</div>
+							<div className="meta">{t("Marketplace")}</div>
 							<div className="text-xs text-ink-3">
-								{loading ? "loading..." : `${filtered.length} / ${data?.catalog.length ?? 0}`}
+								{loading ? t("loading...") : t("{{shown}} / {{total}}", { shown: filtered.length, total: data?.catalog.length ?? 0 })}
 							</div>
 							<div className="flex-1" />
 							<div className="flex items-center gap-2 rounded-md border border-line bg-paper-2 px-2 py-1 text-xs">
@@ -152,7 +154,7 @@ export function MarketplaceView() {
 								<input
 									value={search}
 									onChange={(e) => setSearch(e.target.value)}
-									placeholder="Search by name, tag, description"
+									placeholder={t("Search by name, tag, description")}
 									className="w-56 bg-transparent text-ink placeholder:text-ink-4 focus:outline-none"
 								/>
 							</div>
@@ -164,14 +166,14 @@ export function MarketplaceView() {
 						) : null}
 						<div className="min-h-0 flex-1 overflow-y-auto p-3">
 							{loading && !data ? (
-								<div className="px-3 py-6 text-center text-sm text-ink-3">Loading marketplace catalog...</div>
+								<div className="px-3 py-6 text-center text-sm text-ink-3">{t("Loading marketplace catalog...")}</div>
 							) : null}
 							{!loading && (data?.sources.length ?? 0) === 0 ? (
 								<EmptySources onAdd={() => setAddOpen(true)} onAdded={() => void refresh()} />
 							) : null}
 							{filtered.length === 0 && !loading && (data?.sources.length ?? 0) > 0 ? (
 								<div className="px-3 py-6 text-center text-sm text-ink-3">
-									No catalog entries match the current filters.
+									{t("No catalog entries match the current filters.")}
 								</div>
 							) : null}
 							<div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -225,10 +227,11 @@ function MarketplaceSidebar({
 	refreshing: boolean;
 	onRemoveSource: (name: string) => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
-				<div className="meta">Catalog</div>
+				<div className="meta">{t("Catalog")}</div>
 			</div>
 			<div className="space-y-2 px-2 pt-2">
 				<ScopeRow label="All" count={counts.all} active={scope === "all"} onClick={() => onScope("all")} />
@@ -246,18 +249,18 @@ function MarketplaceSidebar({
 				/>
 			</div>
 			<div className="mt-4 flex h-7 items-center justify-between px-3">
-				<div className="meta">Sources</div>
+				<div className="meta">{t("Sources")}</div>
 				<div className="flex items-center gap-1">
 					<button
 						type="button"
 						className="text-ink-3 hover:text-ink"
 						onClick={onRefresh}
-						title="Refresh marketplaces"
+						title={t("Refresh marketplaces")}
 						disabled={refreshing}
 					>
 						{refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
 					</button>
-					<button type="button" className="text-ink-3 hover:text-ink" onClick={onAdd} title="Add marketplace">
+					<button type="button" className="text-ink-3 hover:text-ink" onClick={onAdd} title={t("Add marketplace")}>
 						<Plus className="h-3.5 w-3.5" />
 					</button>
 				</div>
@@ -271,7 +274,7 @@ function MarketplaceSidebar({
 						marketplaceFilter === "all" ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-paper-3",
 					)}
 				>
-					<span className="truncate">All marketplaces</span>
+					<span className="truncate">{t("All marketplaces")}</span>
 				</button>
 				{sources.map((source) => (
 					<div
@@ -292,7 +295,7 @@ function MarketplaceSidebar({
 						<button
 							type="button"
 							className="opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-							title={`Remove ${source.name}`}
+							title={t("Remove {{name}}", { name: source.name })}
 							onClick={() => onRemoveSource(source.name)}
 						>
 							<X className="h-3.5 w-3.5" />
@@ -305,6 +308,7 @@ function MarketplaceSidebar({
 }
 
 function ScopeRow({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -314,7 +318,7 @@ function ScopeRow({ label, count, active, onClick }: { label: string; count: num
 				active ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-paper-3",
 			)}
 		>
-			<span>{label}</span>
+			<span>{t(label)}</span>
 			<span className="font-mono text-2xs text-ink-3">{count}</span>
 		</button>
 	);
@@ -329,6 +333,7 @@ const SUGGESTED_MARKETPLACES: ReadonlyArray<{ source: string; label: string; des
 ];
 
 function EmptySources({ onAdd, onAdded }: { onAdd: () => void; onAdded: () => void }) {
+	const { t } = useTranslation();
 	const [adding, setAdding] = useState<string | undefined>();
 	const [error, setError] = useState<string | undefined>();
 	const [addedName, setAddedName] = useState<string | undefined>();
@@ -349,22 +354,22 @@ function EmptySources({ onAdd, onAdded }: { onAdd: () => void; onAdded: () => vo
 	return (
 		<div className="mx-auto max-w-xl space-y-3 rounded-md border border-dashed border-line bg-paper-2 p-6">
 			<div className="text-center">
-				<div className="meta">No marketplaces yet</div>
+				<div className="meta">{t("No marketplaces yet")}</div>
 				<p className="mt-1 text-sm text-ink-3">
-					Add a marketplace catalog (GitHub repo, git URL, or local path) to browse and install plugins.
+					{t("Add a marketplace catalog (GitHub repo, git URL, or local path) to browse and install plugins.")}
 				</p>
 			</div>
 			<div className="space-y-2">
-				<div className="meta">Suggested</div>
+				<div className="meta">{t("Suggested")}</div>
 				{SUGGESTED_MARKETPLACES.map((m) => (
 					<div
 						key={m.source}
 						className="flex items-start gap-3 rounded-md border border-line bg-paper px-3 py-2"
 					>
 						<div className="min-w-0 flex-1">
-							<div className="text-sm font-medium text-ink">{m.label}</div>
+							<div className="text-sm font-medium text-ink">{t(m.label)}</div>
 							<div className="mt-0.5 font-mono text-2xs text-ink-3">{m.source}</div>
-							<div className="mt-1 text-xs text-ink-3">{m.description}</div>
+							<div className="mt-1 text-xs text-ink-3">{t(m.description)}</div>
 						</div>
 						<Button
 							variant="primary"
@@ -373,14 +378,14 @@ function EmptySources({ onAdd, onAdded }: { onAdd: () => void; onAdded: () => vo
 							onClick={() => void addSuggested(m.source)}
 						>
 							{adding === m.source ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-							Add
+							{t("Add")}
 						</Button>
 					</div>
 				))}
 			</div>
 			{addedName ? (
 				<div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 font-mono text-xs text-success">
-					Added {addedName}. Refresh below to fetch its catalog.
+					{t("Added {{name}}. Refresh below to fetch its catalog.", { name: addedName })}
 				</div>
 			) : null}
 			{error ? (
@@ -391,7 +396,7 @@ function EmptySources({ onAdd, onAdded }: { onAdd: () => void; onAdded: () => vo
 			<div className="flex justify-center pt-1">
 				<Button variant="outline" size="sm" onClick={onAdd}>
 					<Plus className="h-3.5 w-3.5" />
-					Add custom marketplace
+					{t("Add custom marketplace")}
 				</Button>
 			</div>
 		</div>
@@ -413,6 +418,7 @@ function EntryCard({
 	onInstall: () => void;
 	onUninstall: () => void;
 }) {
+	const { t } = useTranslation();
 	const caps = [
 		entry.capabilities.commands && "cmds",
 		entry.capabilities.agents && "agents",
@@ -437,11 +443,11 @@ function EntryCard({
 				<div className="flex shrink-0 items-center gap-1">
 					{entry.installed ? (
 						<>
-							<Badge tone="success">installed</Badge>
+							<Badge tone="success">{t("installed")}</Badge>
 							<button
 								type="button"
 								className="text-ink-3 hover:text-danger"
-								title="Uninstall"
+								title={t("Uninstall")}
 								onClick={(e) => {
 									e.stopPropagation();
 									onUninstall();
@@ -462,7 +468,7 @@ function EntryCard({
 							disabled={busy}
 						>
 							{busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-							Install
+							{t("Install")}
 						</button>
 					)}
 				</div>
@@ -482,11 +488,12 @@ function EntryCard({
 }
 
 function MarketplaceInspector({ entry }: { entry: MarketplaceCatalogEntry | undefined }) {
+	const { t } = useTranslation();
 	if (!entry) {
 		return (
 			<div className="space-y-2 p-3 text-xs text-ink-3">
-				<div className="meta">Plugin details</div>
-				<p>Select a plugin to see its full metadata.</p>
+				<div className="meta">{t("Plugin details")}</div>
+				<p>{t("Select a plugin to see its full metadata.")}</p>
 			</div>
 		);
 	}
@@ -551,6 +558,7 @@ function DefRow({ k, v }: { k: string; v: ReactNode }) {
 }
 
 export function AddMarketplaceModalHost({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+	const { t } = useTranslation();
 	const [source, setSource] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | undefined>();
@@ -574,21 +582,21 @@ export function AddMarketplaceModalHost({ open, onClose, onAdded }: { open: bool
 	return (
 		<Modal open={open} onClose={onClose} widthClass="max-w-lg">
 			<div className="flex h-11 items-center gap-2 border-b border-line px-3">
-				<div className="meta">Add marketplace</div>
+				<div className="meta">{t("Add marketplace")}</div>
 				<div className="flex-1" />
-				<Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+				<Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close")}>
 					<X className="h-4 w-4" />
 				</Button>
 			</div>
 			<div className="space-y-3 p-3">
 				<p className="text-xs text-ink-3">
-					Source can be a GitHub <code className="font-mono">owner/repo</code>, a git URL, an https URL pointing at a
-					catalog json, or an absolute path to a local catalog directory.
+					{t("Source can be a GitHub")} <code className="font-mono">owner/repo</code>
+					{t(", a git URL, an https URL pointing at a catalog json, or an absolute path to a local catalog directory.")}
 				</p>
 				<input
 					value={source}
 					onChange={(e) => setSource(e.target.value)}
-					placeholder="owner/repo or https://… or /absolute/path"
+					placeholder={t("owner/repo or https://… or /absolute/path")}
 					className="field h-9 w-full px-2 font-mono text-sm"
 				/>
 				{error ? (
@@ -599,11 +607,11 @@ export function AddMarketplaceModalHost({ open, onClose, onAdded }: { open: bool
 			</div>
 			<div className="flex items-center justify-end gap-2 border-t border-line px-3 py-3">
 				<Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
-					Cancel
+					{t("Cancel")}
 				</Button>
 				<Button variant="primary" size="sm" onClick={() => void submit()} disabled={busy || !source.trim()}>
 					{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-					Add
+					{t("Add")}
 				</Button>
 			</div>
 		</Modal>

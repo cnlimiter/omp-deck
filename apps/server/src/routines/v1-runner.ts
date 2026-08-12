@@ -32,6 +32,7 @@ import type {
 } from "@omp-deck/protocol";
 
 import { broadcastBus } from "../broadcast-bus.ts";
+import i18n from "../i18n.ts";
 import { notificationService } from "../notifications/index.ts";
 import { finalizeRun, finishStepRun, insertSkippedStepRun, startStepRun } from "../db/routine-step-runs.ts";
 import { logger } from "../log.ts";
@@ -257,7 +258,7 @@ export async function runV1Pipeline(input: {
 			status: "failed",
 			stdoutExcerpt: "",
 			stderrExcerpt: "",
-			error: "no result produced",
+			error: i18n.t("no result produced"),
 			durationMs: 0,
 		};
 
@@ -320,7 +321,7 @@ export async function runV1Pipeline(input: {
 		finalizePatch.exitCode = null;
 		finalizePatch.abortedAt = endedAtIso;
 		finalizePatch.abortReason = abortReason ?? null;
-		finalizePatch.error = abortReason ? `aborted: ${abortReason}` : null;
+		finalizePatch.error = abortReason ? i18n.t("aborted: {{reason}}", { reason: abortReason }) : null;
 	}
 	finalizeRun(runId, finalizePatch);
 
@@ -329,17 +330,22 @@ export async function runV1Pipeline(input: {
 	if (finalStatus !== "success") {
 		const level: "warn" | "error" = abortReason === "budget" ? "warn" : "error";
 		const reasonLabel = abortReason === "budget"
-			? "budget cap"
+			? i18n.t("budget cap")
 			: abortReason === "cancelled"
-			? "cancelled"
+			? i18n.t("cancelled")
 			: abortReason === "timeout"
-			? "timed out"
-			: abortReason ?? "failed";
+			? i18n.t("timed out")
+			: abortReason === "failure"
+			? i18n.t("failed")
+			: abortReason ?? i18n.t("failed");
 		void notificationService.notify({
 			level,
-			title: `routine "${routine.name}" ${reasonLabel}`,
+			title: i18n.t("routine \"{{name}}\" {{reason}}", { name: routine.name, reason: reasonLabel }),
 			body: stepCountFailed > 0
-				? `${stepCountFailed} step(s) failed out of ${stepCountTotal}`
+				? i18n.t("{{failed}} step(s) failed out of {{total}}", {
+						failed: stepCountFailed,
+						total: stepCountTotal,
+					})
 				: undefined,
 			source: `routine:${routine.id}/run:${runId}`,
 			actionUrl: `/routines/${routine.id}/runs/${runId}`,
@@ -400,7 +406,9 @@ async function dispatchStep(
 				status: "failed",
 				stdoutExcerpt: "",
 				stderrExcerpt: "",
-				error: `unknown step type: ${(step as { type: string }).type}`,
+				error: i18n.t("unknown step type: {{type}}", {
+					type: (step as { type: string }).type,
+				}),
 				durationMs: 0,
 			};
 		}

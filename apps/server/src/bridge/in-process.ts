@@ -33,6 +33,7 @@ import type {
 } from "@omp-deck/protocol";
 
 import { logger } from "../log.ts";
+import i18n from "../i18n.ts";
 import { getDeckModelRegistry } from "../auth-singleton.ts";
 import { looksLikePlaceholderKey } from "../credential-quality.ts";
 import { getEffectivePrelude } from "../orientation-store.ts";
@@ -590,8 +591,18 @@ export class InProcessAgentBridge implements AgentBridge {
 		const altProvider = String(alternative.provider);
 		await notificationService.notify({
 			level: "warn",
-			title: `Authentication failed for ${current.provider}/${current.id}`,
-			body: `You appear to be authenticated for the same model under \`${altProvider}\` (subscription). Switch in the model picker to use your subscription instead.\n\nOriginal error: ${errorMessage.slice(0, 240)}`,
+			title: i18n.t("Authentication failed for {{provider}}/{{id}}", {
+				provider: current.provider,
+				id: current.id,
+			}),
+			body: i18n.t(
+				"You appear to be authenticated for the same model under `{{provider}}` (subscription). Switch in the model picker to use your subscription instead.{{br}}Original error: {{error}}",
+				{
+					provider: altProvider,
+					br: "\n\n",
+					error: errorMessage.slice(0, 240),
+				},
+			),
 			source: `bridge:auth-fallback`,
 		});
 	}
@@ -760,7 +771,7 @@ export class InProcessSessionHandle implements SessionHandle {
 			compact?: (customInstructions?: string) => Promise<unknown>;
 		};
 		if (typeof s.compact !== "function") {
-			throw new Error("session.compact is not available on this SDK build");
+			throw new Error(i18n.t("session.compact is not available on this SDK build"));
 		}
 		await s.compact(focus && focus.trim().length > 0 ? focus.trim() : undefined);
 	}
@@ -768,15 +779,15 @@ export class InProcessSessionHandle implements SessionHandle {
 	async setModel(ref: ModelRef): Promise<void> {
 		const registry = await this.modelRegistryRef();
 		const model = registry.find(ref.provider, ref.id);
-		if (!model) throw new Error(`unknown model: ${ref.provider}/${ref.id}`);
+		if (!model) throw new Error(i18n.t("unknown model: {{provider}}/{{id}}", { provider: ref.provider, id: ref.id }));
 		if (!registry.hasConfiguredAuth(model)) {
-			throw new Error(`no auth configured for ${ref.provider}/${ref.id}`);
+			throw new Error(i18n.t("no auth configured for {{provider}}/{{id}}", { provider: ref.provider, id: ref.id }));
 		}
 		const s = this.session as unknown as {
 			setModel?: (model: unknown, role?: string) => Promise<void>;
 		};
 		if (typeof s.setModel !== "function") {
-			throw new Error("session.setModel is not available on this SDK build");
+			throw new Error(i18n.t("session.setModel is not available on this SDK build"));
 		}
 		await s.setModel(model);
 		// Synthetic event so WS subscribers refresh the session header's model
@@ -791,14 +802,16 @@ export class InProcessSessionHandle implements SessionHandle {
 			const { executeDeckSlashCommand } = await import("../deck-slash-commands.ts");
 			result = await executeDeckSlashCommand(text, { cwd: this.cwd });
 		} catch (err) {
-			const message = `Slash command error: ${String((err as Error).message ?? err)}`;
+			const message = i18n.t("Slash command error: {{detail}}", {
+				detail: String((err as Error).message ?? err),
+			});
 			log.warn(`deck slash dispatch threw for ${text.slice(0, 40)}: ${String(err)}`);
 			this.emitSyntheticSlashRoundTrip(text, message);
 			return { kind: "consumed", output: message };
 		}
 		if (result === "fallthrough") return { kind: "fallthrough" };
-		this.emitSyntheticSlashRoundTrip(text, result.output || "Done.");
-		return { kind: "consumed", output: result.output || "Done." };
+		this.emitSyntheticSlashRoundTrip(text, result.output || i18n.t("Done."));
+		return { kind: "consumed", output: result.output || i18n.t("Done.") };
 	}
 
 	async dispatchSlashCommand(text: string): Promise<SlashDispatchResult> {
@@ -819,7 +832,9 @@ export class InProcessSessionHandle implements SessionHandle {
 		try {
 			result = await executeAcpBuiltinSlashCommand(text, runtime as unknown as Parameters<typeof executeAcpBuiltinSlashCommand>[1]);
 		} catch (err) {
-			const message = `Slash command error: ${String((err as Error).message ?? err)}`;
+			const message = i18n.t("Slash command error: {{detail}}", {
+				detail: String((err as Error).message ?? err),
+			});
 			log.warn(`slash dispatch threw for ${text.slice(0, 40)}: ${String(err)}`);
 			this.emitSyntheticSlashRoundTrip(text, message);
 			return { kind: "consumed", output: message };
@@ -830,7 +845,7 @@ export class InProcessSessionHandle implements SessionHandle {
 			this.emitSyntheticSlashRoundTrip(text, output || undefined);
 			return { kind: "rewritten", output, prompt: (result as { prompt: string }).prompt };
 		}
-		const final = output || "Done.";
+		const final = output || i18n.t("Done.");
 		this.emitSyntheticSlashRoundTrip(text, final);
 		return { kind: "consumed", output: final };
 	}
@@ -971,7 +986,7 @@ export class InProcessSessionHandle implements SessionHandle {
 			isStreaming?: boolean;
 		};
 		if (typeof sdk.popLastQueuedMessage !== "function") {
-			throw new Error("session.popLastQueuedMessage is not available on this SDK build");
+			throw new Error(i18n.t("session.popLastQueuedMessage is not available on this SDK build"));
 		}
 		// Capture survivors with original ids preserved. The edited entry
 		// keeps its id so the deck bubble doesn't re-key.
@@ -1093,11 +1108,15 @@ export class InProcessSessionHandle implements SessionHandle {
 			setSessionName?: (n: string, source?: "auto" | "user") => Promise<boolean> | boolean;
 		};
 		if (typeof s.setSessionName !== "function") {
-			throw new Error("session.setSessionName is not available on this SDK build");
+			throw new Error(i18n.t("session.setSessionName is not available on this SDK build"));
 		}
 		const accepted = await s.setSessionName(name, "user");
 		if (accepted === false) {
-			throw new Error(`session rejected name (empty after sanitization?): ${JSON.stringify(name)}`);
+			throw new Error(
+				i18n.t("session rejected name (empty after sanitization?): {{detail}}", {
+					detail: JSON.stringify(name),
+				}),
+			);
 		}
 	}
 

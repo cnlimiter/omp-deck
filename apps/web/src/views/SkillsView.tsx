@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2, Search, Sparkles } from "lucide-react";
 import type {
 	ListSkillsResponse,
@@ -20,6 +21,7 @@ type LevelFilter = "all" | "user" | "project";
  * by default; the source filter rail surfaces all other providers.
  */
 export function SkillsView() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<ListSkillsResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | undefined>();
@@ -125,9 +127,9 @@ export function SkillsView() {
 			main={
 				<div className="flex h-full min-h-0 flex-col">
 					<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-						<div className="meta">Skills</div>
+						<div className="meta">{t("Skills")}</div>
 						<div className="text-xs text-ink-3">
-							{loading ? "loading..." : `${filtered.length} / ${data?.skills.length ?? 0}`}
+							{loading ? t("loading...") : t("{{shown}} / {{total}}", { shown: filtered.length, total: data?.skills.length ?? 0 })}
 						</div>
 						<div className="flex-1" />
 						<div className="flex items-center gap-2 rounded-md border border-line bg-paper-2 px-2 py-1 text-xs">
@@ -135,7 +137,7 @@ export function SkillsView() {
 							<input
 								value={search}
 								onChange={(e) => setSearch(e.target.value)}
-								placeholder="Search name, description, triggers, tags"
+								placeholder={t("Search name, description, triggers, tags")}
 								className="w-full bg-transparent text-ink placeholder:text-ink-4 focus:outline-none sm:w-72"
 							/>
 						</div>
@@ -155,7 +157,7 @@ export function SkillsView() {
 							)}
 						>
 							{loading && !data ? (
-								<div className="px-3 py-6 text-center text-sm text-ink-3">Loading skills...</div>
+								<div className="px-3 py-6 text-center text-sm text-ink-3">{t("Loading skills...")}</div>
 							) : null}
 							{!loading && filtered.length === 0 ? (
 								<EmptyState total={data?.skills.length ?? 0} />
@@ -197,6 +199,7 @@ export function SkillsView() {
 }
 
 function SkillRow({ skill, active, onClick }: { skill: SkillSummary; active: boolean; onClick: () => void }) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -212,7 +215,7 @@ function SkillRow({ skill, active, onClick }: { skill: SkillSummary; active: boo
 				<span className="truncate text-sm font-medium text-ink">{skill.name}</span>
 				{!skill.enabled ? (
 					<span className="ml-auto rounded bg-paper-3 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-meta text-ink-3">
-						hidden
+						{t("hidden")}
 					</span>
 				) : null}
 			</div>
@@ -256,6 +259,7 @@ function SkillDetailPane({
 	error: string | undefined;
 	onBack?: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-full flex-col">
 			<div className="border-b border-line px-4 py-3">
@@ -264,7 +268,7 @@ function SkillDetailPane({
 						<button
 							type="button"
 							onClick={onBack}
-							aria-label="Back to skill list"
+							aria-label={t("Back to skill list")}
 							className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-3 transition-colors hover:bg-paper-3 hover:text-ink lg:hidden"
 						>
 							<ArrowLeft className="h-4 w-4" />
@@ -282,12 +286,12 @@ function SkillDetailPane({
 				<div className="mt-1 font-mono text-2xs text-ink-3">
 					{skill.pluginId ? (
 						<>
-							<span className="text-ink-4">from plugin</span> {skill.pluginId}
+							<span className="text-ink-4">{t("from plugin")}</span> {skill.pluginId}
 						</>
 					) : (
 						<>
-							<span className="text-ink-4">from</span> {skill.providerLabel}
-							<span className="text-ink-4"> · dir</span> {skill.dirName}
+							<span className="text-ink-4">{t("from")}</span> {skill.providerLabel}{" "}
+							<span className="text-ink-4">{t("· dir")}</span> {skill.dirName}
 						</>
 					)}
 				</div>
@@ -310,7 +314,7 @@ function SkillDetailPane({
 
 			{loading && !detail ? (
 				<div className="flex items-center gap-2 px-4 py-3 text-sm text-ink-3">
-					<Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading SKILL.md...
+					<Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("Loading SKILL.md...")}
 				</div>
 			) : null}
 
@@ -324,9 +328,10 @@ function SkillDetailPane({
 }
 
 function TagRow({ label, values }: { label: string; values: readonly string[] }) {
+	const { t } = useTranslation();
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-1">
-			<span className="font-mono text-2xs uppercase tracking-meta text-ink-4">{label}</span>
+			<span className="font-mono text-2xs uppercase tracking-meta text-ink-4">{t(label)}</span>
 			{values.map((v) => (
 				<span
 					key={v}
@@ -340,16 +345,17 @@ function TagRow({ label, values }: { label: string; values: readonly string[] })
 }
 
 function EmptyState({ total }: { total: number }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-full flex-col items-center justify-center px-6 py-10 text-center">
 			<Sparkles className="h-6 w-6 text-ink-4" />
 			<div className="mt-3 text-sm text-ink-2">
-				{total === 0 ? "No skills discovered" : "No skills match the current filters"}
+				{total === 0 ? t("No skills discovered") : t("No skills match the current filters")}
 			</div>
 			<div className="mt-1 max-w-xs text-xs text-ink-3">
 				{total === 0
-					? "Drop a SKILL.md into ~/.omp/agent/skills/<name>/, or install a marketplace plugin."
-					: "Try clearing the source / level filters or the search box."}
+					? t("Drop a SKILL.md into ~/.omp/agent/skills/<name>/, or install a marketplace plugin.")
+					: t("Try clearing the source / level filters or the search box.")}
 			</div>
 		</div>
 	);
@@ -368,6 +374,7 @@ function SkillsSidebar({
 	levelFilter: LevelFilter;
 	onLevelFilter: (l: LevelFilter) => void;
 }) {
+	const { t } = useTranslation();
 	const providers = useMemo(() => {
 		const m = new Map<string, { label: string; count: number; priority: number }>();
 		for (const s of skills) {
@@ -392,15 +399,15 @@ function SkillsSidebar({
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="border-b border-line px-3 py-2">
-				<div className="meta">Skills</div>
+				<div className="meta">{t("Skills")}</div>
 				<div className="mt-0.5 text-xs text-ink-3">
-					Every skill <span className="text-ink-2">omp</span> can reach — native, marketplace, and
-					sibling agent-tool configs. Enable/disable lives on the owning plugin or provider.
+					{t("Every skill")} <span className="text-ink-2">omp</span>{" "}
+					{t("can reach — native, marketplace, and sibling agent-tool configs. Enable/disable lives on the owning plugin or provider.")}
 				</div>
 			</div>
 
 			<div className="border-b border-line px-3 py-2">
-				<div className="font-mono text-2xs uppercase tracking-meta text-ink-4">Source</div>
+				<div className="font-mono text-2xs uppercase tracking-meta text-ink-4">{t("Source")}</div>
 				<FilterRow
 					label="all"
 					count={skills.length}
@@ -420,7 +427,7 @@ function SkillsSidebar({
 			</div>
 
 			<div className="min-h-0 px-3 py-2">
-				<div className="font-mono text-2xs uppercase tracking-meta text-ink-4">Level</div>
+				<div className="font-mono text-2xs uppercase tracking-meta text-ink-4">{t("Level")}</div>
 				<FilterRow label="all" count={levelCounts.all} active={levelFilter === "all"} onClick={() => onLevelFilter("all")} />
 				<FilterRow label="user" count={levelCounts.user} active={levelFilter === "user"} onClick={() => onLevelFilter("user")} />
 				<FilterRow label="project" count={levelCounts.project} active={levelFilter === "project"} onClick={() => onLevelFilter("project")} />
@@ -442,6 +449,7 @@ function FilterRow({
 	onClick: () => void;
 	highlight?: boolean;
 }) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -455,7 +463,7 @@ function FilterRow({
 						: "text-ink-2 hover:bg-paper-3",
 			)}
 		>
-			<span className="truncate">{label}</span>
+			<span className="truncate">{t(label)}</span>
 			<span className={cn("font-mono text-2xs", active ? "text-ink-2" : "text-ink-3")}>{count}</span>
 		</button>
 	);
@@ -468,14 +476,15 @@ function SkillInspector({
 	skill: SkillSummary | undefined;
 	detail: SkillDetailResponse | null;
 }) {
+	const { t } = useTranslation();
 	if (!skill) {
-		return <div className="px-3 py-4 text-xs text-ink-3">Pick a skill to inspect.</div>;
+		return <div className="px-3 py-4 text-xs text-ink-3">{t("Pick a skill to inspect.")}</div>;
 	}
 	return (
 		<div className="flex h-full flex-col">
 			<div className="border-b border-line px-3 py-2">
-				<div className="meta">Inspector</div>
-				<div className="mt-0.5 text-xs text-ink-3">SKILL.md frontmatter + co-located files.</div>
+				<div className="meta">{t("Inspector")}</div>
+				<div className="mt-0.5 text-xs text-ink-3">{t("SKILL.md frontmatter + co-located files.")}</div>
 			</div>
 			<div className="space-y-3 overflow-y-auto px-3 py-3 text-xs">
 				<DefRow k="name" v={<span className="font-mono">{skill.name}</span>} />
@@ -489,7 +498,7 @@ function SkillInspector({
 					k="enabled"
 					v={
 						<span className={cn("font-mono", skill.enabled ? "text-success" : "text-ink-3")}>
-							{skill.enabled ? "yes" : "hidden (frontmatter)"}
+							{skill.enabled ? t("yes") : t("hidden (frontmatter)")}
 						</span>
 					}
 				/>
@@ -501,10 +510,10 @@ function SkillInspector({
 				{detail && detail.files.length > 0 ? (
 					<div>
 						<div className="font-mono text-2xs uppercase tracking-meta text-ink-4">
-							Bundled files ({detail.files.filter((f) => f.kind === "file").length})
+							{t("Bundled files ({{count}})", { count: detail.files.filter((f) => f.kind === "file").length })}
 						</div>
 						<div className="mt-1 text-2xs text-ink-4">
-							Reachable on demand — not auto-injected into the agent's context.
+							{t("Reachable on demand — not auto-injected into the agent's context.")}
 						</div>
 						<ul className="mt-2 space-y-0.5 font-mono text-2xs">
 							{detail.files.map((f) => (

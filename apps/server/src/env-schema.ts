@@ -1,5 +1,7 @@
 import type { EnvRestartTarget, EnvValueType } from "@omp-deck/protocol";
 
+import i18n from "./i18n";
+
 export interface EnvSchemaEntry {
 	key: string;
 	defaultValue?: string;
@@ -191,6 +193,16 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		description: "Provider API key used by the omp SDK. Replace only; never revealed in list responses.",
 	})),
 	{
+		key: "OMP_DECK_LANG",
+		defaultValue: "en",
+		valueType: "enum",
+		options: ["en", "zh"],
+		sensitive: false,
+		restartRequired: true,
+		hotApply: false,
+		description: "Server message language (en | zh). Restart the server to apply.",
+	},
+	{
 		key: "OMP_DECK_MAINTENANCE_GATE_DISABLED",
 		valueType: "boolean",
 		sensitive: false,
@@ -253,7 +265,7 @@ export function validateEnvValue(entry: EnvSchemaEntry, value: string): string |
 		}
 	}
 	if (entry.valueType === "enum" && entry.options && !entry.options.includes(value.trim())) {
-		return `Expected one of: ${entry.options.join(", ")}`;
+		return i18n.t("Expected one of: {{options}}", { options: entry.options.join(", ") });
 	}
 	return undefined;
 }

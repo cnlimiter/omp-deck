@@ -11,6 +11,7 @@
  * see docs/oauth-deck-sdk-findings.md.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ServerFrame } from "@omp-deck/protocol";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -34,6 +35,7 @@ interface PendingPrompt {
 }
 
 export function OAuthFlowModal({ open, provider, providerName, onClose, onComplete }: Props) {
+	const { t } = useTranslation();
 	const ws = useStore((s) => s.ws);
 	const [phase, setPhase] = useState<Phase>("starting");
 	const [flowId, setFlowId] = useState<string | null>(null);
@@ -47,7 +49,10 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 	const [submittingManual, setSubmittingManual] = useState(false);
 	const [showManual, setShowManual] = useState(false);
 
-	const title = useMemo(() => `Sign in to ${providerName ?? provider ?? "provider"}`, [providerName, provider]);
+	const title = useMemo(
+		() => t("Sign in to {{provider}}", { provider: providerName ?? provider ?? t("provider") }),
+		[providerName, provider],
+	);
 
 	// Kick off the flow when the modal opens.
 	useEffect(() => {
@@ -134,7 +139,7 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 		try {
 			await authApi.submitManualCode(flowId, manualCode.trim());
 			setManualCode("");
-			setProgress("Exchanging authorization code…");
+			setProgress(t("Exchanging authorization code…"));
 			setPhase("progress");
 		} catch (err) {
 			setErrorMessage(err instanceof Error ? err.message : String(err));
@@ -163,30 +168,28 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 				<div>
 					<h2 className="text-lg font-semibold text-ink">{title}</h2>
 					<p className="mt-1 text-xs text-ink-3">
-						The deck talks to the omp SDK; the SDK opens a local callback listener and the
-						provider's consent flow redirects to it. Credentials never leave this machine.
+						{t("The deck talks to the omp SDK; the SDK opens a local callback listener and the provider's consent flow redirects to it. Credentials never leave this machine.")}
 					</p>
 				</div>
 
 				{phase === "starting" ? (
-					<div className="font-mono text-2xs text-ink-3">Preparing consent URL…</div>
+					<div className="font-mono text-2xs text-ink-3">{t("Preparing consent URL…")}</div>
 				) : null}
 
 				{phase === "consent" && consentUrl ? (
 					<div className="flex flex-col gap-2">
 						<a href={consentUrl} target="_blank" rel="noopener noreferrer">
-							<Button variant="primary" className="w-full">Open consent screen in new tab</Button>
+							<Button variant="primary" className="w-full">{t("Open consent screen in new tab")}</Button>
 						</a>
 						{instructions ? <p className="text-xs text-ink-3">{instructions}</p> : null}
 						<p className="text-2xs text-ink-4">
-							After approving in the provider's flow, the SDK's local listener picks up the
-							redirect automatically. You can close this modal once the card flips to "signed in."
+							{t('After approving in the provider\'s flow, the SDK\'s local listener picks up the redirect automatically. You can close this modal once the card flips to "signed in."')}
 						</p>
 					</div>
 				) : null}
 
 				{phase === "progress" ? (
-					<div className="font-mono text-2xs text-ink-3">{progress || "Working…"}</div>
+					<div className="font-mono text-2xs text-ink-3">{progress || t("Working…")}</div>
 				) : null}
 
 				{phase === "prompting" && prompt ? (
@@ -200,12 +203,12 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 							className="rounded border border-line bg-paper px-2 py-1.5 font-mono text-2xs"
 							autoFocus
 						/>
-						<Button onClick={submitPrompt}>Submit</Button>
+						<Button onClick={submitPrompt}>{t("Submit")}</Button>
 					</div>
 				) : null}
 
 				{phase === "complete" ? (
-					<div className="text-sm text-success">✓ Signed in. Closing…</div>
+					<div className="text-sm text-success">{t("✓ Signed in. Closing…")}</div>
 				) : null}
 
 				{phase === "error" && errorMessage ? (
@@ -224,23 +227,23 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 						onToggle={(e) => setShowManual((e.target as HTMLDetailsElement).open)}
 					>
 						<summary className="cursor-pointer font-mono text-2xs uppercase tracking-meta text-ink-3 hover:text-ink">
-							Can't open the link? Paste the redirect URL or code
+							{t("Can't open the link? Paste the redirect URL or code")}
 						</summary>
 						<div className="mt-2 flex flex-col gap-2">
 							<p className="text-2xs text-ink-3">
-								For mobile or remote-deck users: complete the consent in any browser, then
-								copy the full <code>http://localhost:.../callback?code=…&state=…</code> URL
-								from your browser bar and paste it here.
+								{t("For mobile or remote-deck users: complete the consent in any browser, then copy the full")}{" "}
+								<code>http://localhost:.../callback?code=…&state=…</code>{" "}
+								{t("URL from your browser bar and paste it here.")}
 							</p>
 							<input
 								type="text"
 								value={manualCode}
 								onChange={(e) => setManualCode(e.target.value)}
-								placeholder="Paste redirect URL or raw code"
+								placeholder={t("Paste redirect URL or raw code")}
 								className="rounded border border-line bg-paper px-2 py-1.5 font-mono text-2xs"
 							/>
 							<Button onClick={submitManual} disabled={!manualCode.trim() || submittingManual}>
-								{submittingManual ? "Submitting…" : "Submit code"}
+								{submittingManual ? t("Submitting…") : t("Submit code")}
 							</Button>
 						</div>
 					</details>
@@ -248,7 +251,7 @@ export function OAuthFlowModal({ open, provider, providerName, onClose, onComple
 
 				<div className="flex justify-end gap-2 border-t border-line pt-3">
 					<Button variant="ghost" onClick={closeAndCancel}>
-						{phase === "complete" || phase === "error" ? "Close" : "Cancel"}
+						{phase === "complete" || phase === "error" ? t("Close") : t("Cancel")}
 					</Button>
 				</div>
 			</div>

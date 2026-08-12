@@ -64,6 +64,7 @@ import type {
 import type { PlanApprovalResponse } from "./types.ts";
 
 import { logger } from "../log.ts";
+import i18n from "../i18n.ts";
 
 const log = logger("bridge:plan-mode");
 
@@ -298,8 +299,8 @@ export class PlanModeBridge {
 			if (reason === "user_cancelled" || reason === "session_disposed") {
 				const message =
 					reason === "user_cancelled"
-						? "Plan approval cancelled: user exited plan mode."
-						: "Plan approval abandoned: session disposed.";
+						? i18n.t("Plan approval cancelled: user exited plan mode.")
+						: i18n.t("Plan approval abandoned: session disposed.");
 				pending.reject(new Error(message));
 				this.#broadcast({
 					type: "plan_proposal_resolved",
@@ -386,16 +387,18 @@ export class PlanModeBridge {
 	#handlePlanResolve(input: unknown): Promise<AgentToolResult<ResolveToolDetails>> {
 		return runResolveInvocation(input as Parameters<typeof runResolveInvocation>[0], {
 			sourceToolName: "plan_approval",
-			label: "Plan ready for approval",
+			label: i18n.t("Plan ready for approval"),
 			apply: async (_reason, extra) => {
 				if (!this.enabled) {
-					throw new ToolError("Plan mode is not active.");
+					throw new ToolError(i18n.t("Plan mode is not active."));
 				}
 
 				const planContent = await this.#readPlanFile(this.planFilePath);
 				if (planContent === null) {
 					throw new ToolError(
-						`Plan file not found at ${this.planFilePath}. Write the finalized plan before requesting approval.`,
+						i18n.t("Plan file not found at {{path}}. Write the finalized plan before requesting approval.", {
+							path: this.planFilePath,
+						}),
 					);
 				}
 
@@ -447,7 +450,7 @@ export class PlanModeBridge {
 						content: [
 							{
 								type: "text" as const,
-								text: "User rejected the plan. Plan mode disabled; do not auto-execute.",
+								text: i18n.t("User rejected the plan. Plan mode disabled; do not auto-execute."),
 							},
 						],
 						details: {
@@ -510,7 +513,9 @@ export class PlanModeBridge {
 					content: [
 						{
 							type: "text" as const,
-							text: `Plan approved. Executing from ${finalPlanFilePath}.`,
+							text: i18n.t("Plan approved. Executing from {{path}}.", {
+								path: finalPlanFilePath,
+							}),
 						},
 					],
 					details: {

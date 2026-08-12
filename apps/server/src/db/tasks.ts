@@ -8,6 +8,7 @@
 
 import type { Task, TaskState } from "@omp-deck/protocol";
 
+import i18n from "../i18n.ts";
 import { getDb, id, nowIso } from "./index.ts";
 
 interface TaskRow {
@@ -90,7 +91,7 @@ export function getDefaultState(): TaskState {
 				"SELECT id, name, color, position, is_default FROM task_states ORDER BY position ASC LIMIT 1",
 			)
 			.get() as StateRow | null;
-		if (!any) throw new Error("no task states configured");
+		if (!any) throw new Error(i18n.t("no task states configured"));
 		return rowToState(any);
 	}
 	return rowToState(row);
@@ -112,7 +113,7 @@ export function createState(input: {
 		"INSERT INTO task_states (id, name, color, position) VALUES (?, ?, ?, ?)",
 	).run(stateId, input.name, input.color ?? "#6e6a62", nextPos);
 	const out = getState(stateId);
-	if (!out) throw new Error("createState failed");
+	if (!out) throw new Error(i18n.t("createState failed"));
 	return out;
 }
 
@@ -148,13 +149,16 @@ export function reorderStates(orderedIds: string[]): TaskState[] {
 
 	if (orderedIds.length !== current.length) {
 		throw new Error(
-			`reorderStates: expected ${current.length} ids, got ${orderedIds.length}`,
+			i18n.t("reorderStates: expected {{expected}} ids, got {{got}}", {
+				expected: current.length,
+				got: orderedIds.length,
+			}),
 		);
 	}
 	const seen = new Set<string>();
 	for (const sid of orderedIds) {
-		if (!knownIds.has(sid)) throw new Error(`reorderStates: unknown state id "${sid}"`);
-		if (seen.has(sid)) throw new Error(`reorderStates: duplicate state id "${sid}"`);
+		if (!knownIds.has(sid)) throw new Error(i18n.t("reorderStates: unknown state id \"{{id}}\"", { id: sid }));
+		if (seen.has(sid)) throw new Error(i18n.t("reorderStates: duplicate state id \"{{id}}\"", { id: sid }));
 		seen.add(sid);
 	}
 
@@ -178,7 +182,7 @@ export function deleteState(stateId: string): { reassigned: number } {
 	const db = getDb();
 	const target = getState(stateId);
 	if (!target) return { reassigned: 0 };
-	if (target.isDefault) throw new Error("cannot delete the default state");
+	if (target.isDefault) throw new Error(i18n.t("cannot delete the default state"));
 	const fallback = getDefaultState();
 
 	let reassigned = 0;
@@ -229,7 +233,7 @@ export function createTask(input: {
 }): Task {
 	const db = getDb();
 	const state = input.stateId ? getState(input.stateId) : getDefaultState();
-	if (!state) throw new Error(`unknown state: ${input.stateId}`);
+	if (!state) throw new Error(i18n.t("unknown state: {{state}}", { state: input.stateId }));
 
 	const maxOrder = (db
 		.query<{ max: number | null }, [string]>(
@@ -246,7 +250,7 @@ export function createTask(input: {
 				"UPDATE sequences SET value = value + 1 WHERE name = 'tasks' RETURNING value",
 			)
 			.get() as { value: number } | null;
-		if (!seqRow) throw new Error("tasks sequence missing — migration 002 not applied");
+		if (!seqRow) throw new Error(i18n.t("tasks sequence missing — migration 002 not applied"));
 		displayId = seqRow.value;
 		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string]>(
 			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at)
@@ -254,7 +258,7 @@ export function createTask(input: {
 		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, input.cwd ?? null, now, now, now);
 	})();
 	const out = getTask(taskId);
-	if (!out) throw new Error("createTask failed");
+	if (!out) throw new Error(i18n.t("createTask failed"));
 	return out;
 }
 
@@ -320,7 +324,7 @@ export function moveTask(taskId: string, stateId: string, index: number): Task |
 	const existing = getTask(taskId);
 	if (!existing) return undefined;
 	const targetState = getState(stateId);
-	if (!targetState) throw new Error(`unknown state: ${stateId}`);
+	if (!targetState) throw new Error(i18n.t("unknown state: {{state}}", { state: stateId }));
 
 	const crossColumn = existing.stateId !== stateId;
 
@@ -407,7 +411,7 @@ export function findStateByName(needle: string): TaskState | undefined {
 	if (matches.length === 1) return matches[0];
 	if (matches.length > 1) {
 		const names = matches.map((m) => m.name).join(", ");
-		throw new Error(`ambiguous state "${needle}" — matches: ${names}`);
+		throw new Error(i18n.t("ambiguous state \"{{needle}}\" — matches: {{names}}", { needle, names }));
 	}
 	return undefined;
 }

@@ -19,6 +19,7 @@ import type {
 
 import { logger } from "./log.ts";
 import { broadcastBus } from "./broadcast-bus.ts";
+import i18n from "./i18n";
 import {
 	createState,
 	createTask,
@@ -58,10 +59,10 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as CreateTaskRequest;
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		if (!body.title || typeof body.title !== "string") {
-			return c.json({ error: "title is required" }, 400);
+			return c.json({ error: i18n.t("title is required") }, 400);
 		}
 		try {
 			const task = createTask(body);
@@ -75,7 +76,7 @@ export function buildTasksRouter(): Hono {
 
 	app.get("/tasks/:id", (c) => {
 		const task = getTask(c.req.param("id"));
-		if (!task) return c.json({ error: "not found" }, 404);
+		if (!task) return c.json({ error: i18n.t("not found") }, 404);
 		return c.json(task);
 	});
 
@@ -84,11 +85,11 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as UpdateTaskRequest;
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		try {
 			const updated = updateTask(c.req.param("id"), body);
-			if (!updated) return c.json({ error: "not found" }, 404);
+			if (!updated) return c.json({ error: i18n.t("not found") }, 404);
 			notifyTasksChanged();
 			return c.json(updated);
 		} catch (err) {
@@ -108,14 +109,14 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as MoveTaskRequest;
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		if (!body.stateId || typeof body.index !== "number") {
-			return c.json({ error: "stateId and numeric index required" }, 400);
+			return c.json({ error: i18n.t("stateId and numeric index required") }, 400);
 		}
 		try {
 			const moved = moveTask(c.req.param("id"), body.stateId, body.index);
-			if (!moved) return c.json({ error: "task not found" }, 404);
+			if (!moved) return c.json({ error: i18n.t("task not found") }, 404);
 			notifyTasksChanged();
 			return c.json(moved);
 		} catch (err) {
@@ -133,9 +134,9 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as CreateTaskStateRequest;
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
-		if (!body.name) return c.json({ error: "name required" }, 400);
+		if (!body.name) return c.json({ error: i18n.t("name required") }, 400);
 		try {
 			const state = createState(body);
 			return c.json(state, 201);
@@ -150,10 +151,10 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as { orderedIds?: unknown };
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		if (!Array.isArray(body.orderedIds) || body.orderedIds.some((x) => typeof x !== "string")) {
-			return c.json({ error: "orderedIds must be string[]" }, 400);
+			return c.json({ error: i18n.t("orderedIds must be string[]") }, 400);
 		}
 		try {
 			const states = reorderStates(body.orderedIds as string[]);
@@ -170,10 +171,10 @@ export function buildTasksRouter(): Hono {
 		try {
 			body = (await c.req.json()) as UpdateTaskStateRequest;
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		const updated = updateState(c.req.param("id"), body);
-		if (!updated) return c.json({ error: "not found" }, 404);
+		if (!updated) return c.json({ error: i18n.t("not found") }, 404);
 		return c.json(updated);
 	});
 
@@ -188,7 +189,7 @@ export function buildTasksRouter(): Hono {
 
 	app.get("/task-states/:id", (c) => {
 		const state = getState(c.req.param("id"));
-		if (!state) return c.json({ error: "not found" }, 404);
+		if (!state) return c.json({ error: i18n.t("not found") }, 404);
 		return c.json(state);
 	});
 

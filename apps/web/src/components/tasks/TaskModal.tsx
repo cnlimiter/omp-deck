@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Archive, MessageSquarePlus, RotateCcw, Trash2, X } from "lucide-react";
 import type { Task, TaskState } from "@omp-deck/protocol";
 
@@ -31,6 +32,7 @@ export function TaskModal({
 	onArchive,
 	onOpenInChat,
 }: Props) {
+	const { t } = useTranslation();
 	const open = task !== null;
 
 	// Local mirror of editable fields so we can commit on blur without
@@ -88,21 +90,21 @@ export function TaskModal({
 				/>
 				<div className="ml-auto flex shrink-0 items-center gap-1">
 					<IconAction
-						label={isArchived ? "Unarchive" : "Archive"}
+						label={isArchived ? t("Unarchive") : t("Archive")}
 						icon={isArchived ? RotateCcw : Archive}
 						onClick={onArchive}
 					/>
-					<IconAction label="Delete" icon={Trash2} tone="danger" onClick={onDelete} />
+					<IconAction label={t("Delete")} icon={Trash2} tone="danger" onClick={onDelete} />
 					<button
 						type="button"
 						onClick={onOpenInChat}
 						className="btn-primary h-8 shrink-0 gap-1.5 whitespace-nowrap px-2.5 text-sm"
-						title="Open this task as a new chat session"
+						title={t("Open this task as a new chat session")}
 					>
 						<MessageSquarePlus className="h-4 w-4 shrink-0" />
-						<span>Open in chat</span>
+						<span>{t("Open in chat")}</span>
 					</button>
-					<IconAction label="Close" icon={X} onClick={onClose} />
+					<IconAction label={t("Close")} icon={X} onClick={onClose} />
 				</div>
 			</header>
 
@@ -114,16 +116,16 @@ export function TaskModal({
 					onKeyDown={(e) => {
 						if (e.key === "Enter") (e.target as HTMLInputElement).blur();
 					}}
-					placeholder="Untitled task"
+					placeholder={t("Untitled task")}
 					className={cn(
 						"w-full bg-transparent text-xl font-semibold text-ink placeholder:text-ink-4 focus:outline-none",
 						isArchived && "text-ink-3 line-through",
 					)}
 				/>
 				<div className="mt-1 grid grid-cols-[max-content_1fr_max-content_1fr] gap-x-4 gap-y-1 font-mono text-2xs text-ink-3">
-					<span className="text-ink-4">created</span>
+					<span className="text-ink-4">{t("created")}</span>
 					<span>{new Date(task.createdAt).toLocaleString()}</span>
-					<span className="text-ink-4">updated</span>
+					<span className="text-ink-4">{t("updated")}</span>
 					<span>{new Date(task.updatedAt).toLocaleString()}</span>
 					<span className="text-ink-4">cwd</span>
 					<span className="col-span-3">
@@ -131,13 +133,13 @@ export function TaskModal({
 							value={cwd}
 							onChange={(e) => setCwd(e.target.value)}
 							onBlur={commitCwd}
-							placeholder="(defaults to server cwd)"
+							placeholder={t("(defaults to server cwd)")}
 							className="w-full bg-transparent font-mono text-2xs text-ink placeholder:text-ink-4 focus:outline-none"
 						/>
 					</span>
 					{isArchived ? (
 						<>
-							<span className="text-warn">archived</span>
+							<span className="text-warn">{t("archived")}</span>
 							<span>{new Date(task.archivedAt!).toLocaleString()}</span>
 						</>
 					) : null}
@@ -148,7 +150,7 @@ export function TaskModal({
 				<MarkdownEdit
 					value={task.body}
 					onChange={(next) => onSave({ body: next })}
-					placeholder="Click to add notes — markdown supported. Use this for context, acceptance criteria, links."
+					placeholder={t("Click to add notes — markdown supported. Use this for context, acceptance criteria, links.")}
 				/>
 			</div>
 		</Modal>

@@ -10,6 +10,7 @@ import type {
 } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
+import i18n from "./i18n";
 import { logger } from "./log.ts";
 import { getBuildInfo, getUptimeSecs } from "./build-info.ts";
 import { getUpdateCheck } from "./update-check.ts";
@@ -115,7 +116,7 @@ export function buildRouter(
 		try {
 			body = (await c.req.json()) as CreateSessionRequest;
 		} catch {
-			return c.json({ error: "invalid json body" }, 400);
+			return c.json({ error: i18n.t("invalid json body") }, 400);
 		}
 
 		const cwd = body.cwd?.trim() || config.defaultCwd;
@@ -143,7 +144,7 @@ export function buildRouter(
 	app.post("/sessions/:id/abort", async (c) => {
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
-		if (!handle) return c.json({ error: "session not found" }, 404);
+		if (!handle) return c.json({ error: i18n.t("session not found") }, 404);
 		try {
 			await handle.abort();
 			return c.json({ ok: true });
@@ -156,14 +157,14 @@ export function buildRouter(
 	app.post("/sessions/:id/compact", async (c) => {
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
-		if (!handle) return c.json({ error: "session not found" }, 404);
+		if (!handle) return c.json({ error: i18n.t("session not found") }, 404);
 		// Body is optional — accept missing/empty JSON without bouncing.
 		let body: { focus?: string } = {};
 		try {
 			const raw = await c.req.text();
 			if (raw.trim().length > 0) body = JSON.parse(raw) as { focus?: string };
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		try {
 			await handle.compact(body.focus);
@@ -177,12 +178,12 @@ export function buildRouter(
 	app.patch("/sessions/:id", async (c) => {
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
-		if (!handle) return c.json({ error: "session not found or not active" }, 404);
+		if (!handle) return c.json({ error: i18n.t("session not found or not active") }, 404);
 		let body: { name?: string; model?: { provider?: unknown; id?: unknown } };
 		try {
 			body = (await c.req.json()) as { name?: string; model?: { provider?: unknown; id?: unknown } };
 		} catch {
-			return c.json({ error: "invalid json" }, 400);
+			return c.json({ error: i18n.t("invalid json") }, 400);
 		}
 		try {
 			if (typeof body.name === "string") {
@@ -192,7 +193,7 @@ export function buildRouter(
 				const provider = typeof body.model.provider === "string" ? body.model.provider : "";
 				const modelId = typeof body.model.id === "string" ? body.model.id : "";
 				if (!provider || !modelId) {
-					return c.json({ error: "model requires provider and id strings" }, 400);
+					return c.json({ error: i18n.t("model requires provider and id strings") }, 400);
 				}
 				await handle.setModel({ provider, id: modelId });
 			}
@@ -224,7 +225,7 @@ export function buildRouter(
 	app.delete("/sessions/:id", async (c) => {
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
-		if (!handle) return c.json({ error: "session not found" }, 404);
+		if (!handle) return c.json({ error: i18n.t("session not found") }, 404);
 		try {
 			await handle.dispose();
 			return c.json({ ok: true });
@@ -255,7 +256,7 @@ export function buildRouter(
 }
 
 function deriveLabel(cwd: string): string {
-	if (!cwd) return "(unknown)";
+	if (!cwd) return i18n.t("(unknown)");
 	const parts = cwd.split(/[\\/]/).filter(Boolean);
 	return parts[parts.length - 1] ?? cwd;
 }

@@ -30,6 +30,7 @@ import type {
 import type { ExtUiDialogResponse, ServerFrame } from "@omp-deck/protocol";
 
 import { logger } from "../log.ts";
+import i18n from "../i18n.ts";
 
 const log = logger("bridge:ext-ui");
 
@@ -230,7 +231,7 @@ export class ExtensionUIBridge implements ExtensionUIContext {
 		// Extensions that read `ctx.ui.theme` in the deck context need to be
 		// updated; rather than ship a fake Theme that lies about color codes,
 		// throw so the caller knows it's unsupported here.
-		throw new Error("ExtensionUIBridge.theme is not available in deck mode");
+		throw new Error(i18n.t("ExtensionUIBridge.theme is not available in deck mode"));
 	}
 
 	getAllThemes(): Promise<{ name: string; path: string | undefined }[]> {
@@ -242,7 +243,7 @@ export class ExtensionUIBridge implements ExtensionUIContext {
 	}
 
 	setTheme(_theme: unknown): Promise<{ success: boolean; error?: string }> {
-		return Promise.resolve({ success: false, error: "Theme switching is not supported in deck mode" });
+		return Promise.resolve({ success: false, error: i18n.t("Theme switching is not supported in deck mode") });
 	}
 
 	getToolsExpanded(): boolean {

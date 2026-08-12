@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowRight, Clock, ClipboardList, MessagesSquare, Plus } from "lucide-react";
 import type { SessionSummary } from "@omp-deck/protocol";
 
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
+import i18n from "@/i18n";
 
 /**
  * Rendered as the chat main pane when there is no active session selected.
@@ -12,6 +14,7 @@ import { cn, shortPath } from "@/lib/utils";
  * so the user never has to open the sidebar just to start working.
  */
 export function SessionPicker() {
+	const { t } = useTranslation();
 	const session = useStore(selectActiveSession);
 	const workspaces = useStore((s) => s.workspaces);
 	const defaultCwd = useStore((s) => s.defaultCwd);
@@ -41,7 +44,7 @@ export function SessionPicker() {
 			await createSession({ cwd: cwdInUse });
 		} catch (err) {
 			console.error(err);
-			alert(`Failed to create session: ${String(err)}`);
+			alert(t("Failed to create session: {{error}}", { error: String(err) }));
 		} finally {
 			setBusy(false);
 		}
@@ -53,7 +56,7 @@ export function SessionPicker() {
 			await createSession({ cwd: cwdInUse, resumeFromPath: s.path });
 		} catch (err) {
 			console.error(err);
-			alert(`Failed to resume: ${String(err)}`);
+			alert(t("Failed to resume: {{error}}", { error: String(err) }));
 		} finally {
 			setBusy(false);
 		}
@@ -69,12 +72,12 @@ export function SessionPicker() {
 				<WelcomeTaskTile />
 				<div className="mb-6 flex items-baseline gap-2">
 					<MessagesSquare className="h-5 w-5 text-ink-3" />
-					<h1 className="text-lg font-semibold text-ink">Start a session</h1>
+					<h1 className="text-lg font-semibold text-ink">{t("Start a session")}</h1>
 				</div>
 
 				{/* Primary action — workspace picker + new session */}
 				<div className="rounded-lg border border-line bg-paper-2 p-4 shadow-[0_1px_2px_rgba(26,24,20,0.04)]">
-					<div className="meta mb-1.5">Workspace</div>
+					<div className="meta mb-1.5">{t("Workspace")}</div>
 					<select
 						value={selectedCwd}
 						onChange={(e) => {
@@ -83,7 +86,7 @@ export function SessionPicker() {
 						}}
 						className="field h-8 w-full px-2 font-mono text-xs"
 					>
-						<option value="">{`(default) ${defaultCwd}`}</option>
+						<option value="">{t("(default) {{cwd}}", { cwd: defaultCwd })}</option>
 						{workspaces
 							.filter((w) => w.cwd !== defaultCwd)
 							.map((w) => (
@@ -102,14 +105,14 @@ export function SessionPicker() {
 						className="btn-primary mt-3 h-9 w-full text-sm"
 					>
 						<Plus className="h-4 w-4" />
-						New session
+						{t("New session")}
 					</button>
 				</div>
 
 				{/* Live sessions in this server process — usually empty on a fresh load. */}
 				{recent.live.length > 0 ? (
 					<section className="mt-6">
-						<div className="meta mb-2">Live</div>
+						<div className="meta mb-2">{t("Live")}</div>
 						<ul className="space-y-1">
 							{recent.live.map((s) => (
 								<li key={s.sessionId}>
@@ -120,7 +123,7 @@ export function SessionPicker() {
 									>
 										<span
 											className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-											aria-label="live"
+											aria-label={t("live")}
 										/>
 										<span className="flex-1 truncate text-ink">
 											{s.sessionName || formatSessionId(s.sessionId)}
@@ -138,7 +141,7 @@ export function SessionPicker() {
 				{/* Persisted sessions on disk — top 6 newest. */}
 				{recent.persisted.length > 0 ? (
 					<section className="mt-6">
-						<div className="meta mb-2">Recent</div>
+						<div className="meta mb-2">{t("Recent")}</div>
 						<ul className="space-y-1">
 							{recent.persisted.map((s) => (
 								<li key={s.id}>
@@ -156,7 +159,8 @@ export function SessionPicker() {
 											{s.title || formatSessionId(s.id)}
 										</span>
 										<span className="font-mono text-2xs text-ink-4">
-											{shortPath(s.cwd, 24)} · {s.messageCount}m
+											{shortPath(s.cwd, 24)} ·{" "}
+											{t("{{count}}m", { count: s.messageCount })}
 										</span>
 										<span className="font-mono text-2xs text-ink-4">
 											{formatRelative(s.updatedAt || s.createdAt)}
@@ -168,7 +172,7 @@ export function SessionPicker() {
 					</section>
 				) : recent.live.length === 0 ? (
 					<div className="mt-6 text-center font-mono text-2xs text-ink-3">
-						No previous sessions yet — start a new one above.
+						{t("No previous sessions yet — start a new one above.")}
 					</div>
 				) : null}
 			</div>
@@ -180,27 +184,16 @@ function formatSessionId(id: string): string {
 	return id.length <= 12 ? id : `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
 
-const REL: Array<[number, string]> = [
-	[60_000, "just now"],
-	[3_600_000, "m"],
-	[86_400_000, "h"],
-	[2_592_000_000, "d"],
-];
-
 function formatRelative(ts: string): string {
 	if (!ts) return "";
 	const d = new Date(ts);
 	if (Number.isNaN(d.getTime())) return ts;
 	const diff = Date.now() - d.getTime();
 	if (diff < 0) return d.toLocaleDateString();
-	const first = REL[0];
-	if (!first || diff < first[0]) return "just now";
-	for (let i = 1; i < REL.length; i++) {
-		const cur = REL[i];
-		const prev = REL[i - 1];
-		if (!cur || !prev) continue;
-		if (diff < cur[0]) return `${Math.floor(diff / prev[0])}${cur[1]} ago`;
-	}
+	if (diff < 60_000) return i18n.t("just now");
+	if (diff < 3_600_000) return i18n.t("{{count}}m ago", { count: Math.floor(diff / 60_000) });
+	if (diff < 86_400_000) return i18n.t("{{count}}h ago", { count: Math.floor(diff / 3_600_000) });
+	if (diff < 2_592_000_000) return i18n.t("{{count}}d ago", { count: Math.floor(diff / 86_400_000) });
 	return d.toLocaleDateString();
 }
 
@@ -212,6 +205,7 @@ function formatRelative(ts: string): string {
  * first display. Stays dismissed across reloads.
  */
 function OnboardingReminderTile() {
+	const { t } = useTranslation();
 	const [visible, setVisible] = useState(false);
 	useEffect(() => {
 		if (localStorage.getItem("omp-deck:onboarding-skip-toast-pending") === "1") {
@@ -226,7 +220,7 @@ function OnboardingReminderTile() {
 	return (
 		<div className="mb-4 flex items-start gap-3 rounded border border-accent/40 bg-accent/5 p-3 text-xs text-ink-2">
 			<div className="flex-1">
-				You skipped onboarding. Re-run it any time from{" "}
+				{t("You skipped onboarding. Re-run it any time from")}{" "}
 				<a href="/onboarding" className="font-medium text-accent underline">
 					Settings → Onboarding
 				</a>
@@ -236,7 +230,7 @@ function OnboardingReminderTile() {
 				type="button"
 				onClick={dismiss}
 				className="shrink-0 text-ink-3 hover:text-ink"
-				aria-label="Dismiss"
+				aria-label={t("Dismiss")}
 			>
 				×
 			</button>
@@ -252,6 +246,7 @@ function OnboardingReminderTile() {
  * this is a low-stakes hint, not a critical surface.
  */
 function WelcomeTaskTile() {
+	const { t } = useTranslation();
 	const [visible, setVisible] = useState(false);
 	useEffect(() => {
 		let cancelled = false;
@@ -281,12 +276,12 @@ function WelcomeTaskTile() {
 			<div className="flex items-center gap-2">
 				<ClipboardList className="h-4 w-4 shrink-0 text-accent" />
 				<span>
-					<span className="font-medium">T-1 Welcome to omp·deck</span> is waiting in
-					your kanban
+					<span className="font-medium">T-1 Welcome to omp·deck</span>{" "}
+					{t("is waiting in your kanban")}
 				</span>
 			</div>
 			<span className="flex shrink-0 items-center gap-1 text-2xs text-ink-3">
-				Open Tasks <ArrowRight className="h-3 w-3" />
+				{t("Open Tasks")} <ArrowRight className="h-3 w-3" />
 			</span>
 		</a>
 	);

@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useStore } from "../lib/store";
 
@@ -47,44 +48,51 @@ function formatUptime(secs: number): string {
 }
 
 export function ConnectionIndicator(): JSX.Element {
+	const { t } = useTranslation();
 	const heartbeat = useStore((s) => s.heartbeat);
 	const wsStatus = useStore((s) => s.wsStatus);
 	const [now, setNow] = useState(Date.now());
 
 	useEffect(() => {
-		const t = setInterval(() => setNow(Date.now()), 1000);
-		return () => clearInterval(t);
+		const timer = setInterval(() => setNow(Date.now()), 1000);
+		return () => clearInterval(timer);
 	}, []);
 
 	const gap = heartbeat ? now - heartbeat.lastReceivedAtMs : Infinity;
 	const color = classify(gap, heartbeat !== null);
 	const label =
 		color === "green"
-			? "connected"
+			? t("connected")
 			: color === "yellow"
-			? "reconnecting"
-			: heartbeat === null
-			? "no heartbeat yet"
-			: "disconnected";
+				? t("reconnecting")
+				: heartbeat === null
+					? t("no heartbeat yet")
+					: t("disconnected");
 
 	const tooltip = heartbeat
 		? [
-				`status: ${label}`,
-				`ws: ${wsStatus}`,
-				`gap: ${(gap / 1000).toFixed(1)}s since last heartbeat`,
-				`server started: ${heartbeat.serverStartedAt}`,
-				`uptime: ${formatUptime(heartbeat.uptimeSecs)}`,
-				`version: ${heartbeat.version}`,
-				heartbeat.buildSha ? `build: ${heartbeat.buildSha.slice(0, 8)}` : "build: unknown",
-				`pid: ${heartbeat.pid}`,
+				t("status: {{value}}", { value: label }),
+				t("ws: {{value}}", { value: wsStatus }),
+				t("gap: {{value}}s since last heartbeat", { value: (gap / 1000).toFixed(1) }),
+				t("server started: {{value}}", { value: heartbeat.serverStartedAt }),
+				t("uptime: {{value}}", { value: formatUptime(heartbeat.uptimeSecs) }),
+				t("version: {{value}}", { value: heartbeat.version }),
+				heartbeat.buildSha
+					? t("build: {{value}}", { value: heartbeat.buildSha.slice(0, 8) })
+					: t("build: unknown"),
+				t("pid: {{value}}", { value: heartbeat.pid }),
 		  ].join("\n")
-		: `status: ${label}\nws: ${wsStatus}\nwaiting for the deck server to broadcast a heartbeat`;
+		: [
+				t("status: {{value}}", { value: label }),
+				t("ws: {{value}}", { value: wsStatus }),
+				t("waiting for the deck server to broadcast a heartbeat"),
+		  ].join("\n");
 
 	return (
 		<button
 			type="button"
 			title={tooltip}
-			aria-label={`server ${label}`}
+			aria-label={t("server {{status}}", { status: label })}
 			className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800/60"
 		>
 			<span

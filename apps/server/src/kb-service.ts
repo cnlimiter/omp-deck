@@ -46,6 +46,7 @@ import type {
 } from "@omp-deck/protocol";
 
 import { logger } from "./log.ts";
+import i18n from "./i18n.ts";
 
 const log = logger("kb");
 
@@ -232,7 +233,7 @@ export class KbService {
 					exists: true,
 					fileCount: this.records.length,
 					created: false,
-					refusedReason: "kb root already has content; init is a no-op",
+					refusedReason: i18n.t("kb root already has content; init is a no-op"),
 				};
 			}
 		}

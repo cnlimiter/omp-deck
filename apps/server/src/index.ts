@@ -3,8 +3,12 @@
 // own docblock for the full rationale and shape.
 import "./silence-python.ts";
 import { loadManagedEnvIntoProcess } from "./env-store.ts";
+import { applyDeckEnv } from "./i18n.ts";
 
 loadManagedEnvIntoProcess();
+// .env may carry OMP_DECK_LANG; re-apply after env load so server messages
+// (API errors, env descriptions, notification templates) match the deck config.
+applyDeckEnv();
 
 import type { Server, ServerWebSocket } from "bun";
 import * as path from "node:path";

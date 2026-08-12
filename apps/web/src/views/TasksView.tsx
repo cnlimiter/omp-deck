@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
 	DndContext,
@@ -26,6 +27,7 @@ import { tasksApi } from "@/lib/tasks-api";
 import { useStore } from "@/lib/store";
 
 export function TasksView() {
+	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const setPendingDraft = useStore((s) => s.setPendingDraft);
@@ -235,7 +237,7 @@ export function TasksView() {
 
 	async function deleteOpenTask(): Promise<void> {
 		if (!openTask) return;
-		if (!confirm(`Delete "${openTask.title}"?`)) return;
+		if (!confirm(t('Delete "{{title}}"?', { title: openTask.title }))) return;
 		try {
 			await tasksApi.remove(openTask.id);
 			setTasks((prev) => prev.filter((t) => t.id !== openTask.id));
@@ -273,9 +275,9 @@ export function TasksView() {
 				main={
 					<div className="flex h-full min-h-0 flex-col">
 						<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-							<div className="meta">Kanban</div>
+							<div className="meta">{t("Kanban")}</div>
 							<div className="text-xs text-ink-3">
-								{tasks.length} task{tasks.length === 1 ? "" : "s"} · {states.length} columns
+								{tasks.length} {t(tasks.length === 1 ? "task" : "tasks")} · {states.length} {t(states.length === 1 ? "column" : "columns")}
 							</div>
 							<button
 								type="button"
@@ -284,10 +286,10 @@ export function TasksView() {
 									setInspectorOpen(true);
 								}}
 								className="btn-ghost ml-auto h-7 px-2 text-xs"
-								title="Edit columns"
+								title={t("Edit columns")}
 							>
 								<Settings2 className="h-3.5 w-3.5" />
-								Columns
+								{t("Columns")}
 							</button>
 						</div>
 
@@ -299,7 +301,7 @@ export function TasksView() {
 
 						{loading ? (
 							<div className="flex flex-1 items-center justify-center text-sm text-ink-3">
-								Loading…
+								{t("Loading…")}
 							</div>
 						) : (
 							<DndContext
@@ -329,7 +331,7 @@ export function TasksView() {
 										))}
 										{states.length === 0 ? (
 											<div className="flex flex-1 items-center justify-center text-sm text-ink-3">
-												No columns. Open the column editor to add one.
+												{t("No columns. Open the column editor to add one.")}
 											</div>
 										) : null}
 									</div>
@@ -393,18 +395,20 @@ export function TasksView() {
 }
 
 function EmptyInspector() {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-full items-center justify-center px-4 text-center font-mono text-2xs text-ink-3">
-			Click a task to edit, or the Columns button to configure states.
+			{t("Click a task to edit, or the Columns button to configure states.")}
 		</div>
 	);
 }
 
 function TasksSidebar({ tasks, states }: { tasks: Task[]; states: TaskState[] }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="border-b border-line px-3 py-3">
-				<div className="meta mb-1.5">Overview</div>
+				<div className="meta mb-1.5">{t("Overview")}</div>
 				<div className="space-y-1">
 					{states.map((s) => {
 						const n = tasks.filter((t) => t.stateId === s.id).length;
@@ -422,11 +426,11 @@ function TasksSidebar({ tasks, states }: { tasks: Task[]; states: TaskState[] })
 				</div>
 			</div>
 			<div className="px-3 py-3 text-xs text-ink-3">
-				<div className="meta mb-1.5">Tips</div>
+				<div className="meta mb-1.5">{t("Tips")}</div>
 				<ul className="list-disc space-y-1 pl-4">
-					<li>Drag cards between columns to change state</li>
-					<li>Click a column name to edit it</li>
-					<li>Open in chat sends the task as the first prompt</li>
+					<li>{t("Drag cards between columns to change state")}</li>
+					<li>{t("Click a column name to edit it")}</li>
+					<li>{t("Open in chat sends the task as the first prompt")}</li>
 				</ul>
 			</div>
 		</div>

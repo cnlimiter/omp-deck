@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, RefreshCw } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
+import i18n from "@/i18n";
 
 export function Sidebar() {
+	const { t } = useTranslation();
 	const workspaces = useStore((s) => s.workspaces);
 	const defaultCwd = useStore((s) => s.defaultCwd);
 	const sessions = useStore((s) => s.sessions);
@@ -30,7 +33,7 @@ export function Sidebar() {
 			await createSession({ cwd: cwdInUse });
 		} catch (err) {
 			console.error(err);
-			alert(`Failed to create session: ${String(err)}`);
+			alert(t("Failed to create session: {{err}}", { err: String(err) }));
 		} finally {
 			setCreating(false);
 		}
@@ -42,7 +45,7 @@ export function Sidebar() {
 			await createSession({ cwd: cwdInUse, resumeFromPath: p });
 		} catch (err) {
 			console.error(err);
-			alert(`Failed to resume: ${String(err)}`);
+			alert(t("Failed to resume: {{err}}", { err: String(err) }));
 		} finally {
 			setCreating(false);
 		}
@@ -55,12 +58,12 @@ export function Sidebar() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="space-y-3 px-3 py-3 border-b border-line">
 				<div className="flex items-center justify-between">
-					<div className="meta">Workspace</div>
+					<div className="meta">{t("Workspace")}</div>
 					<button
 						type="button"
 						className="text-ink-3 hover:text-ink"
 						onClick={() => void refreshWorkspaces()}
-						aria-label="Refresh workspaces"
+						aria-label={t("Refresh workspaces")}
 					>
 						<RefreshCw className="h-3 w-3" />
 					</button>
@@ -74,7 +77,7 @@ export function Sidebar() {
 					}}
 					className="field h-7 w-full px-2 font-mono text-xs"
 				>
-					<option value="">(all workspaces)</option>
+					<option value="">{t("(all workspaces)")}</option>
 					{workspaces.map((w) => (
 						<option key={w.cwd} value={w.cwd}>
 							{w.label} · {w.sessionCount}
@@ -91,17 +94,17 @@ export function Sidebar() {
 					disabled={creating}
 				>
 					<Plus className="h-3.5 w-3.5" />
-					New session
+					{t("New session")}
 				</button>
 			</div>
 
 			<div className="flex items-center justify-between px-3 pt-3 pb-1">
-				<div className="meta">Sessions · {filtered.length}</div>
+				<div className="meta">{t("Sessions")} · {filtered.length}</div>
 				<button
 					type="button"
 					className="text-ink-3 hover:text-ink"
 					onClick={() => void refreshSessions(selectedCwd || undefined)}
-					aria-label="Refresh sessions"
+					aria-label={t("Refresh sessions")}
 				>
 					<RefreshCw className="h-3 w-3" />
 				</button>
@@ -136,7 +139,7 @@ export function Sidebar() {
 
 				{filtered.length === 0 && liveSessions.length === 0 ? (
 					<div className="px-3 py-6 text-center font-mono text-2xs text-ink-3">
-						No sessions yet.
+						{t("No sessions yet.")}
 					</div>
 				) : null}
 			</div>
@@ -161,6 +164,7 @@ function SessionRow({
 	planMode?: boolean;
 	onClick: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -172,7 +176,7 @@ function SessionRow({
 		>
 			<div className="flex items-center gap-1.5">
 				{live ? (
-					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="live" />
+					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label={t("live")} />
 				) : (
 					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong" />
 				)}
@@ -180,9 +184,9 @@ function SessionRow({
 				{planMode ? (
 					<span
 						className="ml-auto shrink-0 rounded border border-thinking/40 bg-thinking/10 px-1 py-px font-mono text-[10px] uppercase tracking-meta text-thinking"
-						title="Plan mode active"
+						title={t("Plan mode active")}
 					>
-						plan
+						{t("plan")}
 					</span>
 				) : null}
 			</div>
@@ -217,12 +221,12 @@ function formatRelative(ts: string): string {
 	const diff = Date.now() - d.getTime();
 	if (diff < 0) return d.toLocaleDateString();
 	const first = RELATIVE_THRESHOLDS[0];
-	if (!first || diff < first[0]) return "just now";
+	if (!first || diff < first[0]) return i18n.t("just now");
 	for (let i = 1; i < RELATIVE_THRESHOLDS.length; i++) {
 		const cur = RELATIVE_THRESHOLDS[i];
 		const prev = RELATIVE_THRESHOLDS[i - 1];
 		if (!cur || !prev) continue;
-		if (diff < cur[0]) return `${Math.floor(diff / prev[0])}${cur[1]} ago`;
+		if (diff < cur[0]) return `${Math.floor(diff / prev[0])}${cur[1]} ${i18n.t("ago")}`;
 	}
 	return d.toLocaleDateString();
 }

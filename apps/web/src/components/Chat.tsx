@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useStore, selectActiveSession } from "@/lib/store";
 import { ChatHeader } from "./chat/ChatHeader";
 import { SessionPicker } from "./chat/SessionPicker";
@@ -12,6 +13,7 @@ import { QueuedMessage } from "./messages/QueuedMessage";
 import { PlanApproval } from "./messages/PlanApproval";
 
 export function Chat() {
+	const { t } = useTranslation();
 	const session = useStore(selectActiveSession);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const stickyRef = useRef(true);
@@ -48,7 +50,7 @@ export function Chat() {
 				<div className="mx-auto flex max-w-[760px] flex-col gap-7 px-6 py-10">
 					{messages.length === 0 ? (
 						<div className="text-center font-mono text-2xs uppercase tracking-meta text-ink-3">
-							Empty session — send a prompt below.
+							{t("Empty session — send a prompt below.")}
 						</div>
 					) : null}
 

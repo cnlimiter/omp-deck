@@ -47,14 +47,69 @@ import { bridgeLog, bridgeT } from "./bridge-context.ts";
 import { ExtensionUIBridge } from "./ext-ui-bridge.ts";
 import type { PlanModeSessionSurface } from "./plan-mode-bridge.ts";
 import { PlanModeBridge } from "./plan-mode-bridge.ts";
-import type {
-	EventListener,
-	PlanApprovalResponse,
-	SessionHandle,
-	SlashDispatchResult,
-} from "./types.ts";
 
 const log = bridgeLog("bridge:in-process");
+
+// ─── Local contract types ─────────────────────────────────────────────────
+// Structurally identical to bridge/types.ts (the deck's AgentBridge
+// contract) but declared here so this file has zero relative imports beyond
+// its copied siblings — the deployed extension layout cannot resolve a
+// `./types.ts` shim pointing into the repo's apps/server tree.
+
+export type SlashDispatchResult =
+	| { kind: "fallthrough" }
+	| { kind: "consumed"; output: string }
+	| { kind: "rewritten"; output: string; prompt: string };
+
+export type PlanApprovalResponse = {
+	approved: boolean;
+	/** Optional rename: `local://*.md`. When absent, uses the suggested final path. */
+	finalPath?: string;
+	/** Optional edited plan body. When present, overwrites `local://PLAN.md` before the rename. */
+	editedContent?: string;
+};
+
+export type EventListener = (event: import("@omp-deck/protocol").AgentSessionEventJson) => void;
+
+export interface SessionHandle {
+	readonly sessionId: string;
+	readonly sessionFile: string | undefined;
+	readonly cwd: string;
+	subscribe(listener: EventListener): () => void;
+	snapshot(): import("@omp-deck/protocol").SessionSnapshot;
+	prompt(
+		text: string,
+		opts?: {
+			streamingBehavior?: "steer" | "followUp";
+			images?: import("@omp-deck/protocol").ImageAttachment[];
+		},
+	): Promise<void>;
+	isStreamingNow(): boolean;
+	queuedMessageCount(): number;
+	clearQueue(): { steering: number; followUp: number };
+	getQueueSnapshot(): import("@omp-deck/protocol").QueuedPromptWire[];
+	cancelQueuedById(id: string): Promise<boolean>;
+	editQueuedById(
+		id: string,
+		text: string,
+		images?: import("@omp-deck/protocol").ImageAttachment[],
+	): Promise<boolean>;
+	abort(): Promise<void>;
+	setName(name: string): Promise<void>;
+	compact(focus?: string): Promise<void>;
+	setModel(ref: import("@omp-deck/protocol").ModelRef): Promise<void>;
+	dispatchSlashCommand(text: string): Promise<SlashDispatchResult>;
+	dispatchDeckSlashCommand(text: string): Promise<SlashDispatchResult>;
+	getContextUsage(): import("@omp-deck/protocol").ContextUsage | undefined;
+	dispose(): Promise<void>;
+	setPlanMode(enabled: boolean): Promise<void>;
+	getPlanModeContext(): import("@omp-deck/protocol").PlanModeContextWire | undefined;
+	getPendingPlanApproval(): import("@omp-deck/protocol").PendingPlanApprovalWire | undefined;
+	respondToPlanApproval(
+		proposalId: string,
+		response: PlanApprovalResponse,
+	): Promise<"settled" | "unknown">;
+}
 
 // `Model` is owned by `@oh-my-pi/pi-ai`, a transitive dep we don't bring in
 // directly. Treat it as opaque at the bridge boundary — we only ever pass it

@@ -3,6 +3,20 @@
 All notable changes to omp-deck. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Session login**: the access token (`OMP_DECK_ACCESS_TOKEN`) is now
+  exchanged for an HttpOnly, SameSite=Strict session cookie at a full-screen
+  sign-in form (first visit or any 401). The token never enters
+  JS-readable storage; Settings → Access shows session state + Sign out.
+  API clients keep `Authorization: Bearer`.
+- **Remote session resume**: persisted machine sessions can be resumed from
+  the sidebar — the host's SDK opens the file, loads full history into the
+  snapshot, and the chat hydrates it. Paths no machine knows fall back to
+  the deck's local bridge.
+
 ## [0.7.0] — 2026-08-12 — Multi-machine remote agent hosts
 
 Run one center deck on a VPS and connect `omp-agent-host` extensions on

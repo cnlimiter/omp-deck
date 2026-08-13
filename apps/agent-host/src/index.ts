@@ -289,15 +289,40 @@ async function handleRest(req: Request, url: URL): Promise<Response> {
 
 async function createSessionHandler(req: Request): Promise<Response> {
 	const raw = await readJson(req);
-	const cwd = typeof raw.cwd === "string" && raw.cwd.trim() ? raw.cwd.trim() : process.env.OMP_AGENT_HOST_DEFAULT_CWD ?? os.homedir();
 	const model = pickModelRef(raw.model);
-	const entry = await createHostSession({
-		cwd,
-		...(model ? { model } : {}),
-		suppressAutoStart: raw.suppressAutoStart === true,
-	});
+	const entry =
+		typeof raw.resumeFromPath === "string" && raw.resumeFromPath.trim()
+			? await resumeHostSession(raw.resumeFromPath.trim(), model)
+			: await createHostSession({
+					cwd:
+						typeof raw.cwd === "string" && raw.cwd.trim()
+							? raw.cwd.trim()
+							: process.env.OMP_AGENT_HOST_DEFAULT_CWD ?? os.homedir(),
+					...(model ? { model } : {}),
+					suppressAutoStart: raw.suppressAutoStart === true,
+				});
 	const resp: CreateSessionResponse = { sessionId: entry.handle.sessionId, cwd: entry.handle.cwd };
 	return json(resp, 201);
+}
+
+/**
+ * Resume a persisted session file (the machine's own disk path) as a live
+ * SDK session — the remote equivalent of the deck's local resumeSession.
+ * The center's sidebar passes the session `path` from GET /host/sessions.
+ */
+async function resumeHostSession(resumeFromPath: string, model?: ModelRef): Promise<HostSession> {
+	const sessionManager = await SessionManager.open(resumeFromPath);
+	const cwd = (sessionManager.getCwd?.() as string | undefined) ?? process.env.OMP_AGENT_HOST_DEFAULT_CWD ?? os.homedir();
+	const modelRegistry = await ensureModelRegistry();
+	const { handle, unsubscribe } = await createCoreSession({
+		cwd,
+		sessionManager,
+		modelRegistry,
+		...(model ? { model } : {}),
+		hasUI: true,
+		skipPythonPreflight: true,
+	});
+	return registerHostSession(handle, unsubscribe, null, `resumed from ${resumeFromPath}`);
 }
 
 /** Narrow a raw `model` body field ({provider,id} strings) with runtime checks. */
@@ -427,11 +452,24 @@ async function createHostSession(opts: { cwd: string; model?: ModelRef; suppress
 		skipPythonPreflight: true,
 	});
 
+	return registerHostSession(handle, unsubscribe, opts.suppressAutoStart ? null : "/start", `cwd=${opts.cwd}`);
+}
+
+/**
+ * Register a freshly-created SDK session in the host's session map and wire
+ * its event fan-out + dispose lifecycle. Shared by create and resume paths.
+ */
+function registerHostSession(
+	handle: CoreSessionHandle,
+	unsubscribe: () => void,
+	pendingAutoPrompt: string | null,
+	label: string,
+): HostSession {
 	const entry: HostSession = {
 		handle,
 		unsubscribe,
 		subscribers: new Set(),
-		pendingAutoPrompt: opts.suppressAutoStart ? null : "/start",
+		pendingAutoPrompt,
 		lastActivityAt: Date.now(),
 		turnInFlight: false,
 	};
@@ -470,7 +508,7 @@ async function createHostSession(opts: { cwd: string; model?: ModelRef; suppress
 	};
 
 	// eslint-disable-next-line no-console
-	console.log(`[omp-agent-host] session ${handle.sessionId} cwd=${opts.cwd}`);
+	console.log(`[omp-agent-host] session ${handle.sessionId} ${label}`);
 	return entry;
 }
 

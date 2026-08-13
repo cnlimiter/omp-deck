@@ -623,6 +623,8 @@ export class RemoteAgentBridge implements AgentBridge {
 	private readonly registry: MachineRegistry;
 	private readonly clients = new Map<string, HostClient>();
 	private readonly sessions = new Map<string, RemoteSessionHandle>();
+	/** Machine-side session file path → agentId, from the last listSessions. */
+	private readonly pathToAgent = new Map<string, string>();
 
 	constructor(registry: MachineRegistry) {
 		this.registry = registry;
@@ -663,11 +665,48 @@ export class RemoteAgentBridge implements AgentBridge {
 		return handle;
 	}
 
-	async resumeSession(_opts: { sessionPath: string }): Promise<SessionHandle> {
-		// Remote resume is not supported: the session file lives on the host
-		// machine and the deck has no path to it. Creating a session on the
-		// target machine with the same cwd is the supported flow.
-		throw new Error(i18n.t("resume is not supported on remote machines; create a new session instead"));
+	/**
+	 * Resume a machine-side session file (path from the aggregated
+	 * listSessions) as a live host session. Returns undefined when the path
+	 * is not known to any machine (the local bridge should try it instead);
+	 * throws when a known machine fails to resume.
+	 */
+	async tryResumeSession(opts: { sessionPath: string }): Promise<SessionHandle | undefined> {
+		const agentId = this.pathToAgent.get(opts.sessionPath);
+		if (!agentId) return undefined;
+		const machine = this.registry.get(agentId);
+		if (!machine) return undefined;
+		const client = this.ensureClient(machine);
+		client.ensureOnline();
+		const body: Record<string, unknown> = { resumeFromPath: opts.sessionPath };
+		const resp = await client.rest<{ sessionId: string; cwd: string }>("/host/sessions", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+		const handle = new RemoteSessionHandle({
+			sessionId: resp.sessionId,
+			cwd: resp.cwd,
+			agentId,
+			transport: {
+				sendFrame: (frame) => client.send(frame),
+				rest: (path, init) => client.rest(path, init),
+				onDisposed: (sessionId) => {
+					this.sessions.delete(sessionId);
+				},
+			},
+			onFirstSubscriber: () => client.subscribeSession(resp.sessionId),
+			onLastUnsubscriber: () => client.unsubscribeSession(resp.sessionId),
+		});
+		this.sessions.set(resp.sessionId, handle);
+		return handle;
+	}
+
+	async resumeSession(opts: { sessionPath: string }): Promise<SessionHandle> {
+		const handle = await this.tryResumeSession(opts);
+		if (!handle) {
+			throw new Error(i18n.t("resume is not supported on remote machines; create a new session instead"));
+		}
+		return handle;
 	}
 
 	getSession(sessionId: string): SessionHandle | undefined {
@@ -676,7 +715,7 @@ export class RemoteAgentBridge implements AgentBridge {
 
 	async listSessions(opts: { cwd?: string } = {}): Promise<SessionSummary[]> {
 		const out: SessionSummary[] = [];
-		const machineNames = new Map(this.registry.list().map((m) => [m.id, m.name]));
+		this.pathToAgent.clear();
 		await Promise.all(
 			this.registry.list().map(async (machine) => {
 				try {
@@ -684,6 +723,7 @@ export class RemoteAgentBridge implements AgentBridge {
 					const body = await client.rest<{ sessions: SessionSummary[] }>("/host/sessions");
 					for (const s of body.sessions) {
 						out.push({ ...s, agentId: machine.id, agentName: machine.name });
+						if (s.path) this.pathToAgent.set(s.path, machine.id);
 					}
 				} catch (err) {
 					log.warn(`listSessions failed for machine ${machine.id}`, err);

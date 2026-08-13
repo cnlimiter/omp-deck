@@ -60,7 +60,7 @@ import type {
 	ServerFrame,
 } from "@omp-deck/protocol";
 
-import type { PlanApprovalResponse } from "./types.ts";
+import type { PlanApprovalResponse } from "./session-core.ts";
 
 import { bridgeLog, bridgeT } from "./bridge-context.ts";
 

@@ -37,6 +37,12 @@ export class MultiAgentBridge implements AgentBridge {
 	}
 
 	async resumeSession(opts: ResumeSessionOpts): Promise<SessionHandle> {
+		// Remote-first: a path known to a machine is resumed on that machine
+		// (its SDK loads the full history into the snapshot and owns the file
+		// for the session's lifetime — one writer). Paths no machine knows
+		// fall through to the deck's own bridge.
+		const remote = await this.remote.tryResumeSession(opts);
+		if (remote) return remote;
 		return this.local.resumeSession(opts);
 	}
 

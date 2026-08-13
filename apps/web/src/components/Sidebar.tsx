@@ -133,11 +133,10 @@ export function Sidebar() {
 						title={s.title || formatSessionId(s.id)}
 						subtitle={`${shortPath(s.cwd, 26)} · ${s.messageCount}m`}
 						meta={formatRelative(s.updatedAt || s.createdAt)}
-						onClick={() =>
-							s.agentId && s.agentId !== "local"
-								? selectSession(s.id)
-								: void handleResume(s.path)
-						}
+						// Persisted rows resume on their owner: local paths via the
+						// deck's bridge, machine paths via the host's resume
+						// endpoint (activates the disk session as a live session).
+						onClick={() => void handleResume(s.path)}
 					/>
 				))}
 

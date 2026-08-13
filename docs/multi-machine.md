@@ -189,8 +189,9 @@ curl -s -H "Authorization: Bearer $HOST_TOKEN" \
 - **KB / kanban / inbox** stay center-side; only the task's `assigned_agent`
   couples a task to a machine.
 - One center manages all machines; no federation between centers.
-- Remote **resume** of a disk session is not supported — create a session on
-  the machine instead. The sidebar lists each machine's sessions; a live
-  session (still running on the host) reopens with full history via
-  subscribe + snapshot hydration. Sessions the host reaped, or hosts the
-  deck restarted across, surface a "session not active" error instead.
+- **Resume works across machines**: clicking a machine's session in the
+  sidebar (or SessionPicker) resumes it on the host — the host's SDK opens
+  the session file, loads the full history into the snapshot, and the chat
+  hydrates it (verified with 1600+ message sessions). Sessions resume on
+  their owning machine; paths no machine knows fall back to the deck's own
+  bridge. A resumed session stays live on the host until reaped or deleted.

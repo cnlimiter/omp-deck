@@ -157,11 +157,7 @@ export function SessionPicker() {
 								<li key={s.id}>
 									<button
 										type="button"
-										onClick={() =>
-											s.agentId && s.agentId !== "local"
-												? selectSession(s.id)
-												: void resume(s)
-										}
+										onClick={() => void resume(s)}
 										disabled={busy}
 										className={cn(
 											"group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm",

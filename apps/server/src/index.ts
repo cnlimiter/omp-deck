@@ -13,6 +13,7 @@ applyDeckEnv();
 import type { Server, ServerWebSocket } from "bun";
 import * as path from "node:path";
 
+import { isSessionAuthed } from "./routes-auth-session.ts";
 import { InProcessAgentBridge } from "./bridge/in-process.ts";
 import { MultiAgentBridge } from "./bridge/multi.ts";
 import { setBridgeContext } from "../../agent-host/src/bridge/bridge-context.ts";
@@ -137,6 +138,7 @@ async function main(): Promise<void> {
 		{
 			restartServer: () => scheduleRestart(server),
 			machines: { registry: machinesRegistry, bridge },
+			authSession: { getAccessToken: () => accessToken },
 		},
 	);
 	const skillsWatcherDispose = startSkillsWatcher(config);
@@ -146,17 +148,19 @@ async function main(): Promise<void> {
 	// Public-deployment gate (D1): when OMP_DECK_ACCESS_TOKEN is set, every
 	// /api and /ws request must carry `Authorization: Bearer <token>` (WS may
 	// pass `?token=` instead — the web client has no header control there).
-	// /api/health + /api/version stay open for liveness probes; static assets
-	// are exempt (they carry no data). Unset = loopback behavior unchanged.
+	// /api/health + /api/version + the session-auth endpoints stay open for
+	// liveness probes and the login flow; everything else is gated by the
+	// session cookie or Bearer header. Unset = loopback behavior unchanged.
 	const accessToken = (process.env.OMP_DECK_ACCESS_TOKEN ?? "").trim();
 	const unauthorized = (): Response =>
 		Response.json({ error: i18n.t("unauthorized") }, { status: 401 });
-	const isAuthorized = (req: Request): boolean => {
-		if (!accessToken) return true;
-		const header = req.headers.get("authorization");
-		if (header === `Bearer ${accessToken}`) return true;
-		return false;
-	};
+	const AUTH_EXEMPT = new Set([
+		"/api/health",
+		"/api/version",
+		"/api/auth/login",
+		"/api/auth/logout",
+		"/api/auth/status",
+	]);
 
 	server = Bun.serve<ConnectionData>({
 		hostname: config.host,
@@ -165,11 +169,7 @@ async function main(): Promise<void> {
 			const url = new URL(req.url);
 
 			if (url.pathname === "/ws") {
-				if (accessToken) {
-					const viaHeader = req.headers.get("authorization") === `Bearer ${accessToken}`;
-					const viaQuery = url.searchParams.get("token") === accessToken;
-					if (!viaHeader && !viaQuery) return unauthorized();
-				}
+				if (!isSessionAuthed(req, accessToken)) return unauthorized();
 				const data = ws.createConnectionData();
 				const upgraded = srv.upgrade(req, { data });
 				if (upgraded) return undefined;
@@ -177,9 +177,8 @@ async function main(): Promise<void> {
 			}
 
 			if (url.pathname.startsWith("/api/")) {
-				if (accessToken) {
-					const exempt = url.pathname === "/api/health" || url.pathname === "/api/version";
-					if (!exempt && !isAuthorized(req)) return unauthorized();
+				if (!AUTH_EXEMPT.has(url.pathname) && !isSessionAuthed(req, accessToken)) {
+					return unauthorized();
 				}
 				const trimmed = new URL(req.url);
 				trimmed.pathname = url.pathname.slice(4) || "/";
@@ -192,9 +191,9 @@ async function main(): Promise<void> {
 			// traversal the same way the SPA static handler does.
 			if (url.pathname.startsWith("/uploads/")) {
 				// With an access token configured, uploads carry data and are
-				// API-adjacent — gate them too (the web client's upload helper
-				// attaches the bearer header).
-				if (accessToken && !isAuthorized(req)) return unauthorized();
+				// API-adjacent — gate them too (the session cookie rides along
+				// automatically for the browser).
+				if (!isSessionAuthed(req, accessToken)) return unauthorized();
 				return serveUpload(req, config.uploadsRoot);
 			}
 

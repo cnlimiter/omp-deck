@@ -921,5 +921,18 @@
   "Could not reach the server to verify the token: {{detail}}": "Could not reach the server to verify the token: {{detail}}",
   "Save token": "Save token",
   "Clear token": "Clear token",
-  "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.": "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect."
+  "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.": "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.",
+  "Sign in to continue": "Sign in to continue",
+  "This deck requires an access token. Enter the server's OMP_DECK_ACCESS_TOKEN — it is exchanged for a secure session cookie and never stored in this browser.": "This deck requires an access token. Enter the server's OMP_DECK_ACCESS_TOKEN — it is exchanged for a secure session cookie and never stored in this browser.",
+  "Paste OMP_DECK_ACCESS_TOKEN": "Paste OMP_DECK_ACCESS_TOKEN",
+  "Remember me (30 days) — skip login on this browser": "Remember me (30 days) — skip login on this browser",
+  "Signing in…": "Signing in…",
+  "Login failed — check the token against OMP_DECK_ACCESS_TOKEN on the server.": "Login failed — check the token against OMP_DECK_ACCESS_TOKEN on the server.",
+  "The token lives only on the server; this browser holds a session cookie.": "The token lives only on the server; this browser holds a session cookie.",
+  "signed out": "signed out",
+  "signed in": "signed in",
+  "The login screen will ask for the token on your next visit.": "The login screen will ask for the token on your next visit.",
+  "session cookie active; token not readable from this page": "session cookie active; token not readable from this page",
+  "When the server runs with OMP_DECK_ACCESS_TOKEN set, this browser signs in with the token once — the server verifies it and issues an HttpOnly session cookie. The token is never stored in the browser.": "When the server runs with OMP_DECK_ACCESS_TOKEN set, this browser signs in with the token once — the server verifies it and issues an HttpOnly session cookie. The token is never stored in the browser.",
+  "Signed out — the deck requires the access token. The login screen will ask for it.": "Signed out — the deck requires the access token. The login screen will ask for it."
 }

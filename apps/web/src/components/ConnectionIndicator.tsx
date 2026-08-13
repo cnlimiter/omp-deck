@@ -62,7 +62,7 @@ export function ConnectionIndicator(): JSX.Element {
 	const gap = heartbeat ? now - heartbeat.lastReceivedAtMs : Infinity;
 	const color = classify(gap, heartbeat !== null);
 	const label = unauthorized
-		? t("unauthorized")
+		? t("signed out")
 		: color === "green"
 			? t("connected")
 			: color === "yellow"
@@ -72,7 +72,7 @@ export function ConnectionIndicator(): JSX.Element {
 					: t("disconnected");
 
 	const tooltip = unauthorized
-		? t("The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.")
+		? t("Signed out — the deck requires the access token. The login screen will ask for it.")
 		: heartbeat
 		? [
 				t("status: {{value}}", { value: label }),

@@ -195,4 +195,5 @@ export default {
 	"unauthorized": "unauthorized",
 	"Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).": "Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).",
 	"Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.": "Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.",
+	"no access token configured on the server": "no access token configured on the server",
 };

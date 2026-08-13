@@ -35,7 +35,7 @@ export interface NotificationItem {
 /** Max notifications retained in the in-app queue. Older items fall off. */
 const MAX_NOTIFICATIONS = 50;
 
-import { api, onUnauthorized } from "./api";
+import { api, authApi, onUnauthorized } from "./api";
 import { applyEvent, initSession } from "./reducer";
 import type { SessionUi } from "./types";
 import { WsClient, type WsStatus } from "./ws";
@@ -162,6 +162,10 @@ interface StoreState {
 	refreshWorkspaces(): Promise<void>;
 	refreshSessions(cwd?: string): Promise<void>;
 	createSession(opts: { cwd: string; resumeFromPath?: string; agentId?: string }): Promise<string>;
+	/** Exchange the deck access token for an HttpOnly session cookie. */
+	login(token: string, remember?: boolean): Promise<boolean>;
+	/** Clear the session cookie and reset the unauthorized state. */
+	logout(): Promise<void>;
 	selectSession(id: string): void;
 	sendPrompt(text: string, images?: import("@omp-deck/protocol").ImageAttachment[]): void;
 	abort(): void;
@@ -284,6 +288,30 @@ export const useStore = create<StoreState>()(
 			void get().refreshSessions();
 			void get().refreshWorkspaces();
 			return created.sessionId;
+		},
+
+		async login(token: string, remember?: boolean): Promise<boolean> {
+			try {
+				await authApi.login(token, remember);
+			} catch (err) {
+				console.warn("login failed", err);
+				return false;
+			}
+			set({ unauthorized: false });
+			// The cookie now rides on every request — re-bootstrap data and
+			// reconnect the WS (its upgrade carries the cookie too).
+			if (!get().ws) get().connect();
+			await Promise.all([get().refreshWorkspaces(), get().refreshSessions()]);
+			return true;
+		},
+
+		async logout(): Promise<void> {
+			try {
+				await authApi.logout();
+			} catch (err) {
+				console.warn("logout failed", err);
+			}
+			set({ unauthorized: true });
 		},
 
 		selectSession(id: string) {

@@ -93,10 +93,11 @@ WantedBy=multi-user.target
 Bind the headscale IP (`OMP_DECK_HOST=100.64.0.1`) so only the tailnet can
 reach the API, or bind loopback and expose via `tailscale serve`. The
 `OMP_DECK_ACCESS_TOKEN` is required for any public-ish binding: every `/api`
-and `/ws` request must then carry `Authorization: Bearer <token>`. The web
-client stores it in localStorage under `omp-deck:access-token` — set it once
-in Settings → Access (paste + verify; the header indicator shows
-"unauthorized" until it matches).
+and `/ws` request must then authenticate. The web client shows a full-screen
+**login** on first visit (or after any 401) — paste the token once; the
+server validates it and issues an HttpOnly session cookie (see
+docs/deployment.md → Access token). API clients use
+`Authorization: Bearer <token>`.
 
 Register machines either by editing `machines.json` before first boot:
 

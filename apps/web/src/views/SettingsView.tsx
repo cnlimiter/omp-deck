@@ -21,7 +21,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { OAuthFlowModal } from "@/components/settings/OAuthFlowModal";
-import { getAccessToken, setAccessToken } from "@/lib/api";
 import { bridgesApi } from "@/lib/bridges-api";
 import { machinesApi } from "@/lib/machines-api";
 import { settingsApi } from "@/lib/settings-api";
@@ -278,119 +277,61 @@ function EnvSection() {
 }
 
 /**
- * Access-token management. The token is the deck's API gate
- * (OMP_DECK_ACCESS_TOKEN on the server); the browser keeps it in
- * localStorage and attaches it to every /api + /ws request. This section
- * replaces the console one-liner: paste the token here once, verify it
- * against a real endpoint, and the header indicator flips to connected.
+ * Session status for the deck's access-token login. The token itself never
+ * reaches this browser — login happens on the full-screen gate (first visit
+ * or after a 401) and the server holds an HttpOnly session cookie. Here the
+ * user can see the session state and sign out.
  */
 function AccessSection() {
 	const { t } = useTranslation();
-	const [draft, setDraft] = useState("");
-	const [status, setStatus] = useState<"idle" | "checking" | "ok" | "invalid" | "error">("idle");
-	const [message, setMessage] = useState<string | undefined>();
-	const configured = getAccessToken() !== "";
+	const unauthorized = useStore((s) => s.unauthorized);
+	const logout = useStore((s) => s.logout);
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | undefined>();
 
-	async function save(): Promise<void> {
-		const token = draft.trim();
-		if (!token) {
-			setAccessToken("");
-			setStatus("idle");
-			setMessage(undefined);
-			return;
-		}
-		setStatus("checking");
-		setMessage(undefined);
+	async function signOut(): Promise<void> {
+		setBusy(true);
+		setError(undefined);
 		try {
-			// Verify against a real gated endpoint before persisting — a typo
-			// must not lock the browser into an invalid token.
-			const res = await fetch("/api/workspaces", {
-				headers: { Authorization: `Bearer ${token}` },
-			});
-			if (res.ok) {
-				setAccessToken(token);
-				setDraft("");
-				setStatus("ok");
-				setMessage(t("Token accepted — the connection indicator is now green."));
-			} else if (res.status === 401) {
-				setStatus("invalid");
-				setMessage(t("Token rejected (401). Check the value against OMP_DECK_ACCESS_TOKEN on the server."));
-			} else {
-				setStatus("error");
-				setMessage(t("Unexpected response while verifying the token ({{code}}).", { code: res.status }));
-			}
+			await logout();
 		} catch (err) {
-			setStatus("error");
-			setMessage(t("Could not reach the server to verify the token: {{detail}}", { detail: String(err) }));
+			setError(String(err));
+		} finally {
+			setBusy(false);
 		}
-	}
-
-	function clearToken(): void {
-		setAccessToken("");
-		setDraft("");
-		setStatus("idle");
-		setMessage(undefined);
 	}
 
 	return (
 		<div className="mx-auto max-w-2xl space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">{t("Access token")}</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("Access")}</h1>
 				<p className="mt-1 max-w-xl text-sm text-ink-3">
 					{t(
-						"When the server runs with OMP_DECK_ACCESS_TOKEN set, every API and WebSocket request must carry the token. Paste it here once — it is stored only in this browser (localStorage) and sent as a bearer header.",
+						"When the server runs with OMP_DECK_ACCESS_TOKEN set, this browser signs in with the token once — the server verifies it and issues an HttpOnly session cookie. The token is never stored in the browser.",
 					)}
 				</p>
 			</div>
 
 			<div className="rounded-md border border-line bg-paper p-4">
 				<div className="flex items-center gap-2">
-					<Badge tone={configured ? "success" : "danger"}>
-						{configured ? t("token configured") : t("no token")}
+					<Badge tone={unauthorized ? "danger" : "success"}>
+						{unauthorized ? t("signed out") : t("signed in")}
 					</Badge>
-					{configured ? (
-						<span className="font-mono text-2xs text-ink-4">{t("stored locally, never shown again")}</span>
-					) : null}
+					<span className="font-mono text-2xs text-ink-4">
+						{unauthorized
+							? t("The login screen will ask for the token on your next visit.")
+							: t("session cookie active; token not readable from this page")}
+					</span>
 				</div>
-				<label className="mt-3 block">
-					<div className="meta mb-1">{t("Token")}</div>
-					<input
-						className="field h-9 w-full px-2 font-mono text-sm"
-						type="password"
-						value={draft}
-						onChange={(e) => {
-							setDraft(e.target.value);
-							setStatus("idle");
-							setMessage(undefined);
-						}}
-						placeholder={t("Paste OMP_DECK_ACCESS_TOKEN (or the server's .deck-token)")}
-						autoComplete="off"
-						spellCheck={false}
-					/>
-				</label>
-				{status === "checking" ? (
-					<div className="mt-2 text-xs text-ink-3">{t("Verifying token…")}</div>
-				) : null}
-				{status === "ok" || status === "invalid" || status === "error" ? (
-					<div
-						className={`mt-2 rounded-md border px-3 py-2 font-mono text-xs ${
-							status === "ok"
-								? "border-success/30 bg-success/10 text-success"
-								: "border-danger/30 bg-danger/10 text-danger"
-						}`}
-					>
-						{message}
+				{error ? (
+					<div className="mt-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs text-danger">
+						{error}
 					</div>
 				) : null}
-				<div className="mt-3 flex gap-2">
-					<Button size="sm" disabled={status === "checking" || !draft.trim()} onClick={() => void save()}>
-						{t("Save token")}
+				<div className="mt-3">
+					<Button variant="danger" size="sm" disabled={busy || unauthorized} onClick={() => void signOut()}>
+						{t("Sign out")}
 					</Button>
-					{configured ? (
-						<Button variant="outline" size="sm" onClick={clearToken}>
-							{t("Clear token")}
-						</Button>
-					) : null}
 				</div>
 			</div>
 		</div>

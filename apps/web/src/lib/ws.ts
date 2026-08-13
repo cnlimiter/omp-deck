@@ -15,24 +15,19 @@ export class WsClient {
 	private retryTimer: ReturnType<typeof setTimeout> | null = null;
 	private status: WsStatus = "closed";
 	private url: string;
-	private baseUrl: string;
 	private closed = false;
 
 	constructor(url?: string) {
 		const proto = location.protocol === "https:" ? "wss" : "ws";
-		// Token is read at connect() time (not construction) so a token set in
-		// localStorage after a 401 is picked up by the next reconnect without a
-		// page reload.
-		this.baseUrl = url ?? `${proto}://${location.host}/ws`;
-		this.url = this.baseUrl;
+		// Auth rides the HttpOnly session cookie (attached automatically by
+		// the browser) — no token in the URL, ever.
+		this.url = url ?? `${proto}://${location.host}/ws`;
 	}
 
 	connect(): void {
 		if (this.closed) return;
 		this.setStatus("connecting");
-		const token = localStorage.getItem("omp-deck:access-token");
-		const url = token && !this.baseUrl.includes("?") ? `${this.baseUrl}?token=${encodeURIComponent(token)}` : this.baseUrl;
-		const sock = new WebSocket(url);
+		const sock = new WebSocket(this.url);
 		this.socket = sock;
 
 		sock.addEventListener("open", () => {

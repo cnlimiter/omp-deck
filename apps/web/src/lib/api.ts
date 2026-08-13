@@ -11,23 +11,13 @@ import type {
 
 const BASE = "/api";
 
-/** localStorage key holding the deck access token (OMP_DECK_ACCESS_TOKEN). */
-export const ACCESS_TOKEN_KEY = "omp-deck:access-token";
-
-export function getAccessToken(): string {
-	return localStorage.getItem(ACCESS_TOKEN_KEY) ?? "";
-}
-
-export function setAccessToken(token: string): void {
-	if (token) localStorage.setItem(ACCESS_TOKEN_KEY, token);
-	else localStorage.removeItem(ACCESS_TOKEN_KEY);
-}
-
-/** Authorization header for the deck access token, when one is stored. */
-export function authHeaders(): Record<string, string> {
-	const token = getAccessToken();
-	return token ? { Authorization: `Bearer ${token}` } : {};
-}
+/**
+ * Session-based auth: the deck's access token is exchanged for an HttpOnly
+ * session cookie at login and never touches JS-readable storage. All API
+ * calls + the WebSocket rely on the cookie the browser attaches
+ * automatically; a 401 flips the store's `unauthorized` flag which drives
+ * the login gate.
+ */
 
 type UnauthorizedListener = () => void;
 const unauthorizedListeners = new Set<UnauthorizedListener>();
@@ -51,12 +41,10 @@ function notifyUnauthorized(): void {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-	const token = getAccessToken();
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
 		headers: {
 			"content-type": "application/json",
-			...(token ? { Authorization: `Bearer ${token}` } : {}),
 			...(init?.headers ?? {}),
 		},
 	});
@@ -72,6 +60,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 	return (await res.json()) as T;
 }
+
+export interface AuthStatus {
+	authenticated: boolean;
+}
+
+export const authApi = {
+	status(): Promise<AuthStatus> {
+		return request<AuthStatus>("/auth/status");
+	},
+	login(token: string, remember?: boolean): Promise<{ ok: boolean }> {
+		return request("/auth/login", {
+			method: "POST",
+			body: JSON.stringify({ token, ...(remember ? { remember: true } : {}) }),
+		});
+	},
+	logout(): Promise<{ ok: boolean }> {
+		return request("/auth/logout", { method: "POST", body: "{}" });
+	},
+};
 
 export const api = {
 	listWorkspaces(): Promise<ListWorkspacesResponse> {

@@ -37,6 +37,7 @@ import { buildOrientationRouter } from "./routes-orientation.ts";
 import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildMachinesRouter } from "./routes-machines.ts";
+import { buildAuthSessionRouter } from "./routes-auth-session.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
@@ -54,6 +55,7 @@ export function buildRouter(
 	opts: {
 		restartServer?: () => RestartServerResponse;
 		machines?: { registry: MachineRegistry; bridge: MultiAgentBridge };
+		authSession?: { getAccessToken: () => string };
 	} = {},
 ): Hono {
 	const app = new Hono();
@@ -258,6 +260,9 @@ export function buildRouter(
 	app.route("/", buildKbRouter(kb));
 	app.route("/auth/oauth", buildAuthOAuthRouter());
 	app.route("/onboarding", buildOnboardingRouter());
+	if (opts.authSession) {
+		app.route("/auth", buildAuthSessionRouter(opts.authSession));
+	}
 	if (opts.machines) {
 		app.route("/", buildMachinesRouter(opts.machines.registry, opts.machines.bridge));
 	}

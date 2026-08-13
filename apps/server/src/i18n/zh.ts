@@ -195,4 +195,5 @@ export default {
 	"unauthorized": "未授权",
 	"Remote agent-host registry JSON file. Defaults to <dataDir>/machines.json. CRUD via Settings → Machines; changes apply on the next request (no restart).": "远程 agent 主机注册表 JSON 文件。默认位于 <dataDir>/machines.json。可通过 设置 → 机器 增删改；变更在下次请求时生效（无需重启）。",
 	"Bearer token required on every /api and /ws request when set (public deployments behind a VPN/tailnet). Leave empty for loopback-only setups. The web client reads it from localStorage `omp-deck:access-token`.": "设置后，所有 /api 与 /ws 请求必须携带 Bearer token（公网部署在 VPN/tailnet 之后时）。留空则仅限本机。Web 客户端从 localStorage `omp-deck:access-token` 读取。",
+	"no access token configured on the server": "服务器未配置访问令牌",
 };

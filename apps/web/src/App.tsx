@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AppRouter } from "./router";
 import { selectActiveSession, useStore } from "./lib/store";
 import { useNotificationBridge } from "./lib/notifications";
+import { AuthGate } from "./components/AuthGate";
 import { NotificationToast } from "./components/NotificationToast";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 
@@ -16,9 +17,11 @@ export function App() {
 
 	return (
 		<>
-			<NotificationPermissionBanner />
-			<AppRouter />
-			<NotificationToast />
+			<AuthGate>
+				<NotificationPermissionBanner />
+				<AppRouter />
+				<NotificationToast />
+			</AuthGate>
 		</>
 	);
 }

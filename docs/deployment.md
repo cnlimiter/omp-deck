@@ -71,27 +71,34 @@ Host deck-host
   LocalForward 8787 127.0.0.1:8787
 ```
 
-## Access token
+## Access token (login)
 
-Since 0.7.0, setting `OMP_DECK_ACCESS_TOKEN` turns on bearer-token
-authentication for every `/api`, `/ws` and `/uploads` request
-(`/api/health` + `/api/version` stay open for liveness probes):
+Since 0.7.0, setting `OMP_DECK_ACCESS_TOKEN` turns on authentication for
+every `/api`, `/ws` and `/uploads` request:
 
 ```sh
 OMP_DECK_ACCESS_TOKEN="$(openssl rand -hex 32)" bun run start
 ```
 
-The web client sends the token automatically once it is stored in
-localStorage under `omp-deck:access-token`. Set it in the UI: **Settings →
-Access** — paste the token, the page verifies it against a real endpoint
-(401 → rejected with a hint, 200 → saved), and the header indicator flips
-from "unauthorized" to connected. The token is read on every request and
-every WebSocket connect, so no reload is required after saving it.
+The web client treats it as a **login**: the first visit (or any 401)
+shows a full-screen sign-in form. Entering the token calls
+`POST /api/auth/login`; the server validates it (constant-time) and issues
+an **HttpOnly, SameSite=Strict session cookie** (Secure under https;
+"Remember me" extends it to 30 days). The token never reaches
+JS-readable storage — after login the browser simply carries the cookie on
+every request and WebSocket upgrade. `POST /api/auth/logout` clears it, and
+**Settings → Access** shows the session state with a Sign-out button.
+
+API clients and admin scripts can still authenticate with
+`Authorization: Bearer <token>` — both paths are accepted, the cookie is
+what the browser uses.
 
 This layer is **not** a substitute for the network gates: it protects the
-deck's own surface but adds no identity story (no login, no per-user
-accounts). Put Tailscale/SSH in front for identity; use the token when the
-deck must be reachable from more than one machine.
+deck's own surface but adds no identity story (no per-user accounts — the
+token is a shared site key). Put Tailscale/SSH in front for identity; use
+the token when the deck must be reachable from more than one machine.
+Serving over **HTTPS** is strongly recommended so the cookie's `Secure`
+attribute engages.
 
 ## Multi-machine
 

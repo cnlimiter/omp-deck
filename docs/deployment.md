@@ -82,12 +82,11 @@ OMP_DECK_ACCESS_TOKEN="$(openssl rand -hex 32)" bun run start
 ```
 
 The web client sends the token automatically once it is stored in
-localStorage under `omp-deck:access-token` — set it from the browser console
-(`localStorage.setItem('omp-deck:access-token', '<token>')`) or a tiny
-bookmarklet. Until the token matches, the header indicator shows
-"unauthorized" and API calls return `401 {"error":"unauthorized"}`. The
-token is read on every request and every WebSocket connect, so a reload is
-not required after setting it.
+localStorage under `omp-deck:access-token`. Set it in the UI: **Settings →
+Access** — paste the token, the page verifies it against a real endpoint
+(401 → rejected with a hint, 200 → saved), and the header indicator flips
+from "unauthorized" to connected. The token is read on every request and
+every WebSocket connect, so no reload is required after saving it.
 
 This layer is **not** a substitute for the network gates: it protects the
 deck's own surface but adds no identity story (no login, no per-user

@@ -72,7 +72,7 @@ export function ConnectionIndicator(): JSX.Element {
 					: t("disconnected");
 
 	const tooltip = unauthorized
-		? t("The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Set it in Settings → Environment or the browser console via localStorage.setItem('omp-deck:access-token', '<token>').")
+		? t("The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.")
 		: heartbeat
 		? [
 				t("status: {{value}}", { value: label }),

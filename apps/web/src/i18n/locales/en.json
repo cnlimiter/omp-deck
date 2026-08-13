@@ -904,5 +904,22 @@
   "Remove machine \"{{id}}\"?": "Remove machine \"{{id}}\"?",
   "Remote omp agent hosts running the omp-agent-host extension. Sessions created on a machine run there; kanban tasks can be assigned to a machine.": "Remote omp agent hosts running the omp-agent-host extension. Sessions created on a machine run there; kanban tasks can be assigned to a machine.",
   "My lab machine": "My lab machine",
-  "OMP_AGENT_HOST_TOKEN on the machine": "OMP_AGENT_HOST_TOKEN on the machine"
+  "OMP_AGENT_HOST_TOKEN on the machine": "OMP_AGENT_HOST_TOKEN on the machine",
+  "Access": "Access",
+  "API access token": "API access token",
+  "Access token": "Access token",
+  "When the server runs with OMP_DECK_ACCESS_TOKEN set, every API and WebSocket request must carry the token. Paste it here once — it is stored only in this browser (localStorage) and sent as a bearer header.": "When the server runs with OMP_DECK_ACCESS_TOKEN set, every API and WebSocket request must carry the token. Paste it here once — it is stored only in this browser (localStorage) and sent as a bearer header.",
+  "token configured": "token configured",
+  "no token": "no token",
+  "stored locally, never shown again": "stored locally, never shown again",
+  "Token": "Token",
+  "Paste OMP_DECK_ACCESS_TOKEN (or the server's .deck-token)": "Paste OMP_DECK_ACCESS_TOKEN (or the server's .deck-token)",
+  "Verifying token…": "Verifying token…",
+  "Token accepted — the connection indicator is now green.": "Token accepted — the connection indicator is now green.",
+  "Token rejected (401). Check the value against OMP_DECK_ACCESS_TOKEN on the server.": "Token rejected (401). Check the value against OMP_DECK_ACCESS_TOKEN on the server.",
+  "Unexpected response while verifying the token ({{code}}).": "Unexpected response while verifying the token ({{code}}).",
+  "Could not reach the server to verify the token: {{detail}}": "Could not reach the server to verify the token: {{detail}}",
+  "Save token": "Save token",
+  "Clear token": "Clear token",
+  "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect.": "The deck requires an access token (OMP_DECK_ACCESS_TOKEN). Open Settings → Access and paste the token to connect."
 }

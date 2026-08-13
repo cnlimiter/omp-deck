@@ -59,8 +59,11 @@ COPY apps/bridges/telegram/package.json apps/bridges/telegram/
 RUN bun install --frozen-lockfile --production
 
 # Sources for runtime (Bun executes TS natively — no transpile step).
+# apps/agent-host carries the shared session-core the server imports
+# cross-package (bridge-context, session-core, plan-mode/ext-ui bridges).
 COPY packages/protocol packages/protocol
 COPY apps/server apps/server
+COPY apps/agent-host apps/agent-host
 
 # Built web assets.
 COPY --from=web-build /app/apps/web/dist /app/apps/web/dist

@@ -120,12 +120,30 @@ or via Settings → Machines → Add machine after boot.
 Requirements: the machine's `omp` binary (any recent version), and a token
 `openssl rand -hex 32`.
 
+### One-line install
+
+```sh
+curl -sfL https://raw.githubusercontent.com/cnlimiter/omp-deck/main/scripts/install-agent-host.sh | sh
+```
+
+Fetches the extension (repository tarball by default; `--tag v0.7.0` prefers
+the matching GitHub release asset; `--source <dir>` uses a local checkout —
+handy on networks without GitHub access), copies it to
+`~/.omp/agent/extensions/omp-agent-host/`, verifies the layout, and prints
+the next steps (token, `omp --mode rpc`, systemd unit, deck registration).
+On restricted networks set `ALL_PROXY`/`HTTPS_PROXY` for the download.
+
+Manual install (from a checkout of omp-deck):
+
 ```bash
-# 1) install the extension (from a checkout of omp-deck)
 EXT=~/.omp/agent/extensions/omp-agent-host
 mkdir -p "$EXT"
 cp -r apps/agent-host/src/* "$EXT/"
+```
 
+### Run
+
+```bash
 # 2) systemd user unit
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/omp-agent-host.service <<'EOF'
@@ -169,6 +187,21 @@ curl -s -H "Authorization: Bearer $HOST_TOKEN" \
   http://100.64.0.2:8790/host/models                # model catalog
 # wrong/missing token → 401
 ```
+
+## Release asset
+
+When cutting a release, attach the extension as a standalone tarball so
+machines can install without cloning the whole repo:
+
+```bash
+# from the repo root — layout matches apps/agent-host/src exactly
+tar czf omp-agent-host-<version>.tar.gz -C apps/agent-host/src .
+# upload as a GitHub Release asset named omp-agent-host-<version>.tar.gz
+```
+
+The install script then works with `sh install-agent-host.sh --tag
+v<version>` (it downloads
+`https://github.com/<repo>/releases/download/<tag>/omp-agent-host-<tag>.tar.gz`).
 
 ## Security notes
 
